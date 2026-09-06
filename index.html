@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liste de courses</title>
+<meta name="theme-color" content="#16825a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Courses">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Liste de courses</h1>
+  <span id="offline-dot" class="offline-dot" hidden title="Hors ligne"></span>
+</header>
+
+<div id="offline-banner" class="offline-banner" hidden>
+  <span id="offline-banner-text">Hors ligne</span>
+</div>
+
+<main id="view-liste" class="view">
+  <form id="form-ajout" class="add-form" autocomplete="off">
+    <div class="add-form-row">
+      <input id="input-nom" type="text" placeholder="Ajouter un article…" required>
+      <select id="input-categorie" aria-label="Catégorie"></select>
+    </div>
+    <div id="suggestions" class="suggestions" hidden></div>
+    <button type="submit" class="btn-primary">Ajouter</button>
+  </form>
+
+  <div id="liste-contenu" class="liste-contenu"></div>
+  <p id="liste-vide" class="empty-state" hidden>Votre liste est vide. Ajoutez un article ci-dessus, ou piochez dans un modèle.</p>
+</main>
+
+<main id="view-modeles" class="view" hidden>
+  <div class="section-header">
+    <h2>Listes récurrentes</h2>
+  </div>
+  <form id="form-nouveau-modele" class="add-form">
+    <div class="add-form-row">
+      <input id="input-nouveau-modele" type="text" placeholder="Nom du nouveau modèle…">
+      <button type="submit" class="btn-secondary">Créer</button>
+    </div>
+  </form>
+  <div id="modeles-contenu"></div>
+  <p id="modeles-vide" class="empty-state" hidden>Aucun modèle pour l'instant. Créez-en un, ou ajoutez un article de la liste à un modèle via l'icône étoile.</p>
+</main>
+
+<main id="view-archives" class="view" hidden>
+  <div class="section-header">
+    <h2>Archives</h2>
+  </div>
+  <div id="archives-contenu"></div>
+  <p id="archives-vide" class="empty-state" hidden>Aucun article archivé.</p>
+</main>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="liste">
+    <span class="tab-icon">🛒</span><span>Liste</span>
+  </button>
+  <button class="tab-btn" data-tab="modeles">
+    <span class="tab-icon">⭐</span><span>Modèles</span>
+  </button>
+  <button class="tab-btn" data-tab="archives">
+    <span class="tab-icon">📦</span><span>Archives</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast" hidden>
+  <span id="toast-text"></span>
+  <button id="toast-undo" class="toast-undo">Annuler</button>
+</div>
+
+<div id="modal-modele" class="modal" hidden>
+  <div class="modal-card">
+    <h3>Ajouter à un modèle</h3>
+    <div id="modal-modele-liste" class="modal-modele-liste"></div>
+    <form id="form-modal-nouveau-modele" autocomplete="off">
+      <input id="modal-input-nouveau-modele" type="text" placeholder="Ou nouveau modèle…">
+      <button type="submit" class="btn-secondary">Créer et ajouter</button>
+    </form>
+    <button id="modal-fermer" class="btn-text">Fermer</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
