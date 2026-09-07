@@ -4,10 +4,10 @@ const CONFIG = {
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzvSFTsOOwoK19ocb4EGPXQ_-dIidveogK5uA2fP1Hdxk1rNCE6IPBVQPsQZsnyGBAkkQ/exec',
   CATEGORIES: [
     'Fruits & Légumes',
-    'Crèmerie',
+    'Laitage & Fromage',
     'Viande & Poisson',
-    'Épicerie',
-    'Boulangerie',
+    'Sec',
+    'Traiteur',
     'Surgelés',
     'Boissons',
     'Hygiène',
