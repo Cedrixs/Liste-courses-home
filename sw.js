@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liste-courses-v1';
+const CACHE_NAME = 'liste-courses-v2';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -29,7 +29,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return; // ne pas intercepter les appels vers Apps Script
+
+  // Réseau d'abord (pour toujours servir la dernière version quand la connexion est bonne),
+  // avec repli sur le cache local si hors ligne.
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request)
+      .then(res => {
+        const copie = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copie));
+        return res;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
