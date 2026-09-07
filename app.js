@@ -29,10 +29,23 @@ function debounce(fn, delay) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
 }
 
-function formatDate(iso) {
+function formatDateHeure(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return `${date} à ${heure}`;
+}
+
+function libelleJour(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const auj = new Date();
+  const hier = new Date(auj); hier.setDate(hier.getDate() - 1);
+  const memeJour = (a, b) => a.toDateString() === b.toDateString();
+  if (memeJour(d, auj)) return "Aujourd'hui";
+  if (memeJour(d, hier)) return 'Hier';
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 // ---- Cache locale ----
@@ -155,15 +168,12 @@ function updateOfflineBanner() {
   const enAttente = loadQueue().length;
   const horsLigne = !navigator.onLine;
   const banner = document.getElementById('offline-banner');
-  const dot = document.getElementById('offline-dot');
   if (horsLigne || enAttente > 0) {
-    dot.hidden = false;
     banner.hidden = false;
     document.getElementById('offline-banner-text').textContent = horsLigne
       ? (enAttente > 0 ? `Hors ligne · ${enAttente} action(s) en attente` : 'Hors ligne')
       : `Synchronisation… ${enAttente} action(s) en attente`;
   } else {
-    dot.hidden = true;
     banner.hidden = true;
   }
 }
@@ -209,7 +219,7 @@ function archiver(id) {
     state.liste.push(item);
     saveCache(); renderListe(); renderArchives();
     queueOrSend('restaurerDepuisArchive', { id: item.id });
-  });
+  }, 'inventory_2');
 }
 
 function restaurerDepuisArchive(id) {
@@ -221,7 +231,7 @@ function restaurerDepuisArchive(id) {
   renderListe();
   renderArchives();
   queueOrSend('restaurerDepuisArchive', { id });
-  showToast(`« ${item.nom} » restauré dans la liste`);
+  showToast(`« ${item.nom} » restauré dans la liste`, null, 'undo');
 }
 
 // ---- Actions : Modèles ----
@@ -245,7 +255,7 @@ function ajouterAuModele(nom, categorie, modele) {
     renderModeles();
     queueOrSend('ajouterAuModele', { modele, nom, categorie });
   }
-  showToast(`Ajouté au modèle « ${modele} »`);
+  showToast(`Ajouté au modèle « ${modele} »`, null, 'bookmark_add');
 }
 
 function supprimerDuModele(modele, id) {
@@ -313,6 +323,31 @@ function renderAll() {
   renderArchives();
 }
 
+function pluriel(n, mot) { return `${n} ${mot}${n > 1 ? 's' : ''}`; }
+
+function renderStatsListe() {
+  const total = state.liste.length;
+  const achetes = state.liste.filter(it => it.statut === 'achete').length;
+  const nbRayons = new Set(state.liste.map(it => it.categorie || 'Autre')).size;
+  document.getElementById('stats-liste').textContent = total === 0
+    ? 'Aucun article pour le moment'
+    : `${pluriel(total, 'article')} · ${achetes} acheté${achetes > 1 ? 's' : ''} · ${pluriel(nbRayons, 'rayon')}`;
+}
+
+function renderStatsModeles() {
+  const nb = Object.keys(state.modeles).length;
+  document.getElementById('stats-modeles').textContent = nb === 0
+    ? 'Aucune liste récurrente'
+    : `${nb} liste${nb > 1 ? 's' : ''} récurrente${nb > 1 ? 's' : ''}`;
+}
+
+function renderStatsArchives() {
+  const nb = state.archives.length;
+  document.getElementById('stats-archives').textContent = nb === 0
+    ? 'Aucun article archivé'
+    : `${nb} article${nb > 1 ? 's' : ''} archivé${nb > 1 ? 's' : ''}`;
+}
+
 function groupParCategorie(items) {
   const groupes = {};
   items.forEach(item => {
@@ -323,6 +358,7 @@ function groupParCategorie(items) {
 }
 
 function renderListe() {
+  renderStatsListe();
   const conteneur = document.getElementById('liste-contenu');
   const vide = document.getElementById('liste-vide');
   if (state.liste.length === 0) {
@@ -340,9 +376,14 @@ function renderListe() {
       if ((a.statut === 'achete') !== (b.statut === 'achete')) return a.statut === 'achete' ? 1 : -1;
       return (a.dateAjout || '').localeCompare(b.dateAjout || '');
     });
+    const nbAchetes = items.filter(it => it.statut === 'achete').length;
     return `
       <div class="categorie-groupe">
-        <p class="categorie-titre">${escapeHtml(cat)}</p>
+        <div class="categorie-entete">
+          <span class="categorie-badge">${escapeHtml(cat)}</span>
+          <span class="categorie-trait"></span>
+          <span class="categorie-compte">${nbAchetes}/${items.length}</span>
+        </div>
         ${items.map(renderItemRow).join('')}
       </div>`;
   }).join('');
@@ -352,16 +393,17 @@ function renderItemRow(item) {
   const achete = item.statut === 'achete';
   return `
     <div class="item-row ${achete ? 'achete' : ''}" data-id="${item.id}">
-      <button class="item-checkbox ${achete ? 'checked' : ''}" data-action="toggle" title="Marquer acheté">${achete ? '✓' : ''}</button>
+      <button class="item-checkbox ${achete ? 'checked' : ''}" data-action="toggle" title="Marquer acheté">${achete ? '<span class="ms msf">check</span>' : ''}</button>
       <span class="item-nom">${escapeHtml(item.nom)}</span>
       <div class="item-actions">
-        <button class="icon-btn" data-action="modele" title="Ajouter à un modèle">⭐</button>
-        <button class="icon-btn" data-action="archiver" title="Archiver">📦</button>
+        <button class="icon-btn" data-action="modele" title="Ajouter à un modèle"><span class="ms">bookmark_add</span></button>
+        <button class="icon-btn" data-action="archiver" title="Archiver"><span class="ms">inventory_2</span></button>
       </div>
     </div>`;
 }
 
 function renderModeles() {
+  renderStatsModeles();
   const conteneur = document.getElementById('modeles-contenu');
   const vide = document.getElementById('modeles-vide');
   const noms = Object.keys(state.modeles).sort((a, b) => a.localeCompare(b));
@@ -376,27 +418,35 @@ function renderModeles() {
     return `
       <div class="modele-carte" data-modele="${escapeHtml(modele)}">
         <div class="modele-entete">
-          <strong>${escapeHtml(modele)}</strong>
-          <button class="btn-secondary" style="width:auto;padding:8px 12px;" data-action="ajouter-depuis-modele">Ajouter à la liste</button>
+          <div class="modele-entete-titre">
+            <span class="ms">bookmarks</span>
+            <strong>${escapeHtml(modele)}</strong>
+            <span class="modele-compte">${items.length}</span>
+          </div>
+          ${items.length === 0 ? '' : `
+          <div class="modele-actions">
+            <button type="button" class="btn-pill btn-pill-compact" data-action="ajouter-depuis-modele"><span class="ms">playlist_add</span>Ajouter à la liste</button>
+            <div class="modele-selection-liens">
+              <button type="button" class="lien-selection selectionner" data-action="tout-selectionner">Tout sélectionner</button>
+              <button type="button" class="lien-selection enlever" data-action="enlever-selection">Enlever sélection</button>
+            </div>
+          </div>`}
         </div>
-        ${items.length === 0 ? '<p class="archive-date">Aucun article dans ce modèle pour l\'instant.</p>' : `
-        <div class="modele-selection-liens">
-          <button type="button" class="lien-selection" data-action="tout-selectionner">Tout sélectionner</button>
-          <button type="button" class="lien-selection" data-action="enlever-selection">Enlever sélection</button>
-        </div>
-        ${items.map(item => `
-          <div class="modele-item" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}">
-            <label class="modele-item-label">
-              <input type="checkbox" class="modele-checkbox" ${estArticleSelectionne(modele, item.nom) ? 'checked' : ''}>
-              <span>${escapeHtml(item.nom)}</span>
-            </label>
-            <button class="icon-btn" data-action="supprimer-du-modele" title="Retirer du modèle">✕</button>
-          </div>`).join('')}`}
+        ${items.length === 0 ? '<p class="empty-state-inline dans-carte">Aucun article dans ce modèle pour l\'instant.</p>' : items.map(item => {
+          const selectionne = estArticleSelectionne(modele, item.nom);
+          return `
+          <div class="modele-item ${selectionne ? 'selectionne' : ''}" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}">
+            <button type="button" class="modele-checkbox-btn ${selectionne ? 'checked' : ''}" data-action="toggle-selection" title="Sélectionner">${selectionne ? '<span class="ms msf">check</span>' : ''}</button>
+            <span class="modele-item-nom">${escapeHtml(item.nom)}</span>
+            <button class="icon-btn icon-btn-danger" data-action="supprimer-du-modele" title="Retirer du modèle"><span class="ms">close</span></button>
+          </div>`;
+        }).join('')}
       </div>`;
   }).join('');
 }
 
 function renderArchives() {
+  renderStatsArchives();
   const conteneur = document.getElementById('archives-contenu');
   const vide = document.getElementById('archives-vide');
   if (state.archives.length === 0) {
@@ -406,11 +456,25 @@ function renderArchives() {
   }
   vide.hidden = true;
   const items = state.archives.slice().sort((a, b) => (b.dateArchive || '').localeCompare(a.dateArchive || ''));
-  conteneur.innerHTML = items.map(item => `
-    <div class="archive-row" data-id="${item.id}">
-      <span class="item-nom">${escapeHtml(item.nom)}</span>
-      <span class="archive-date">${formatDate(item.dateArchive)}</span>
-      <button class="icon-btn" data-action="restaurer" title="Restaurer dans la liste">↩️</button>
+  const groupes = [];
+  items.forEach(item => {
+    const libelle = libelleJour(item.dateArchive);
+    let groupe = groupes.find(g => g.libelle === libelle);
+    if (!groupe) { groupe = { libelle, items: [] }; groupes.push(groupe); }
+    groupe.items.push(item);
+  });
+
+  conteneur.innerHTML = groupes.map(groupe => `
+    <div class="archive-groupe">
+      <div class="archive-date-entete">${escapeHtml(groupe.libelle)}</div>
+      ${groupe.items.map(item => `
+        <div class="archive-row" data-id="${item.id}">
+          <div class="archive-infos">
+            <div class="archive-nom">${escapeHtml(item.nom)}</div>
+            <div class="archive-meta">${escapeHtml(item.categorie || 'Autre')} · ${formatDateHeure(item.dateArchive)}</div>
+          </div>
+          <button class="btn-restaurer" data-action="restaurer" title="Restaurer dans la liste"><span class="ms">undo</span>Restaurer</button>
+        </div>`).join('')}
     </div>`).join('');
 }
 
@@ -421,9 +485,10 @@ function populateCategorieSelect() {
 
 // ---- Toast (annuler) ----
 
-function showToast(message, onUndo) {
+function showToast(message, onUndo, icone = 'check_circle') {
   clearTimeout(toastTimer);
   const toast = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = icone;
   document.getElementById('toast-text').textContent = message;
   const undoBtn = document.getElementById('toast-undo');
   undoBtn.hidden = !onUndo;
@@ -440,10 +505,21 @@ function hideToast() {
 
 function ouvrirModalModele(nom, categorie) {
   modalCurrentItem = { nom, categorie };
+  document.getElementById('modal-soustitre').textContent = `« ${nom} » sera ajouté au modèle choisi.`;
   const conteneur = document.getElementById('modal-modele-liste');
   const noms = Object.keys(state.modeles).sort((a, b) => a.localeCompare(b));
-  conteneur.innerHTML = noms.map(m => `<button class="modele-choix-btn" data-modele="${escapeHtml(m)}">${escapeHtml(m)}</button>`).join('')
-    || '<p class="archive-date">Aucun modèle existant, créez-en un ci-dessous.</p>';
+  conteneur.innerHTML = noms.map(m => {
+    const nbArticles = (state.modeles[m] || []).length;
+    return `
+      <button type="button" class="modele-choix-btn" data-modele="${escapeHtml(m)}">
+        <span class="ms icon-bookmarks">bookmarks</span>
+        <span class="modele-choix-infos">
+          <span class="modele-choix-nom">${escapeHtml(m)}</span>
+          <span class="modele-choix-compte">${nbArticles} article${nbArticles > 1 ? 's' : ''}</span>
+        </span>
+        <span class="ms icon-chevron">chevron_right</span>
+      </button>`;
+  }).join('') || '<p class="modal-vide">Aucun modèle existant, créez-en un ci-dessous.</p>';
   document.getElementById('modal-modele').hidden = false;
 }
 
@@ -464,6 +540,9 @@ const chercherSuggestions = debounce(async (q) => {
   } catch (err) {
     resultats = suggestionsLocales(q);
   }
+  // La recherche est asynchrone : si le champ a changé (ou a été vidé par un envoi
+  // du formulaire) entre-temps, on ignore ce résultat devenu obsolète.
+  if (document.getElementById('input-nom').value.trim() !== q) return;
   if (resultats.length === 0) { conteneur.hidden = true; return; }
   conteneur.innerHTML = resultats.map(r => `
     <div class="suggestion-item" data-nom="${escapeHtml(r.nom)}" data-categorie="${escapeHtml(r.categorie)}">
@@ -587,15 +666,12 @@ function setupEventListeners() {
       supprimerDuModele(modele, id);
     } else if (action === 'tout-selectionner') toutSelectionner(modele);
     else if (action === 'enlever-selection') enleverSelection(modele);
-  });
-
-  document.getElementById('modeles-contenu').addEventListener('change', (e) => {
-    const checkbox = e.target.closest('.modele-checkbox');
-    if (!checkbox) return;
-    const carte = e.target.closest('.modele-carte');
-    const itemEl = e.target.closest('.modele-item');
-    if (!carte || !itemEl) return;
-    definirSelectionArticle(carte.dataset.modele, itemEl.dataset.nom, checkbox.checked);
+    else if (action === 'toggle-selection') {
+      const itemEl = e.target.closest('.modele-item');
+      const dejaSelectionne = itemEl.classList.contains('selectionne');
+      definirSelectionArticle(modele, itemEl.dataset.nom, !dejaSelectionne);
+      renderModeles();
+    }
   });
 
   document.getElementById('archives-contenu').addEventListener('click', (e) => {
@@ -622,7 +698,11 @@ function setupEventListeners() {
 
   document.getElementById('modal-fermer').addEventListener('click', fermerModalModele);
 
-  document.getElementById('btn-reglages').addEventListener('click', () => ouvrirEcranConfig({ obligatoire: false }));
+  document.querySelectorAll('.btn-settings').forEach(btn => {
+    btn.addEventListener('click', () => ouvrirEcranConfig({ obligatoire: false }));
+  });
+
+  document.getElementById('btn-vide-modeles').addEventListener('click', () => activerOnglet('modeles'));
 
   document.getElementById('form-config').addEventListener('submit', (e) => {
     e.preventDefault();

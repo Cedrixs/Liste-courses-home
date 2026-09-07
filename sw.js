@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liste-courses-v4';
+const CACHE_NAME = 'liste-courses-v5';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -30,9 +30,11 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+const ORIGINES_MISES_EN_CACHE = [self.location.origin, 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return; // ne pas intercepter les appels vers Apps Script
+  if (!ORIGINES_MISES_EN_CACHE.includes(url.origin)) return; // ne pas intercepter les appels vers Apps Script
 
   // Réseau d'abord (pour toujours servir la dernière version quand la connexion est bonne),
   // avec repli sur le cache local si hors ligne.

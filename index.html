@@ -4,103 +4,155 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Liste de courses</title>
-<meta name="theme-color" content="#0c3b7f">
+<meta name="theme-color" content="#12294F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Courses">
+<meta name="apple-mobile-web-app-title" content="Rue Felix">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<header class="app-header">
-  <h1>Liste de courses</h1>
-  <span id="offline-dot" class="offline-dot" hidden title="Hors ligne"></span>
-  <button id="btn-reglages" class="header-icon-btn" title="Réglages de connexion">⚙️</button>
-</header>
 
 <div id="offline-banner" class="offline-banner" hidden>
   <span id="offline-banner-text">Hors ligne</span>
 </div>
 
 <main id="view-liste" class="view">
-  <form id="form-ajout" class="add-form" autocomplete="off">
-    <div class="add-form-row">
-      <input id="input-nom" type="text" placeholder="Ajouter un article…" required>
-      <select id="input-categorie" aria-label="Catégorie"></select>
+  <header class="hero-header">
+    <div class="hero-top">
+      <img src="icons/icon-192.png" alt="" class="hero-logo">
+      <div class="hero-titles">
+        <p class="hero-eyebrow">Rue Felix</p>
+        <h1 class="hero-title">Liste de courses</h1>
+        <p class="hero-stats" id="stats-liste"></p>
+      </div>
+      <button type="button" class="btn-settings" title="Réglages de connexion"><span class="ms">settings</span></button>
     </div>
+    <form id="form-ajout" class="add-bar-row" autocomplete="off">
+      <div class="add-bar">
+        <span class="ms add-bar-icon">edit</span>
+        <input id="input-nom" type="text" placeholder="Ajouter un article…" required>
+        <select id="input-categorie" class="add-bar-categorie" aria-label="Catégorie"></select>
+        <span class="ms add-bar-chevron">expand_more</span>
+      </div>
+      <button type="submit" class="add-bar-submit" aria-label="Ajouter"><span class="ms">add</span></button>
+    </form>
     <div id="suggestions" class="suggestions" hidden></div>
-    <button type="submit" class="btn-primary">Ajouter</button>
-  </form>
+  </header>
 
-  <div id="liste-contenu" class="liste-contenu"></div>
-  <p id="liste-vide" class="empty-state" hidden>Votre liste est vide. Ajoutez un article ci-dessus, ou piochez dans un modèle.</p>
+  <div class="view-scroll">
+    <div id="liste-contenu" class="liste-contenu"></div>
+    <div id="liste-vide" class="empty-state" hidden>
+      <div class="empty-icon"><span class="ms">checklist</span></div>
+      <p class="empty-title">La liste est vide</p>
+      <p class="empty-text">Ajoutez un article ci-dessus, ou partez d'un de vos modèles.</p>
+      <button type="button" class="btn-pill" id="btn-vide-modeles"><span class="ms">bookmarks</span>Ouvrir un modèle</button>
+    </div>
+  </div>
 </main>
 
 <main id="view-modeles" class="view" hidden>
-  <div class="section-header">
-    <h2>Listes récurrentes</h2>
-  </div>
-  <form id="form-nouveau-modele" class="add-form">
-    <div class="add-form-row">
-      <input id="input-nouveau-modele" type="text" placeholder="Nom du nouveau modèle…">
-      <button type="submit" class="btn-secondary">Créer</button>
+  <header class="compact-header">
+    <img src="icons/icon-192.png" alt="" class="compact-logo">
+    <div class="compact-titles">
+      <h1 class="compact-title">Modèles</h1>
+      <p class="compact-stats" id="stats-modeles"></p>
     </div>
-  </form>
-  <div id="modeles-contenu"></div>
-  <p id="modeles-vide" class="empty-state" hidden>Aucun modèle pour l'instant. Créez-en un, ou ajoutez un article de la liste à un modèle via l'icône étoile.</p>
+    <button type="button" class="btn-settings" title="Réglages de connexion"><span class="ms">settings</span></button>
+  </header>
+
+  <div class="view-scroll">
+    <div class="carte-nouveau-modele">
+      <p class="carte-label">Nouveau modèle</p>
+      <form id="form-nouveau-modele" class="nouveau-modele-row">
+        <input id="input-nouveau-modele" type="text" placeholder="Nom du modèle">
+        <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">add</span>Créer</button>
+      </form>
+    </div>
+
+    <div id="modeles-contenu"></div>
+    <p id="modeles-vide" class="empty-state-inline" hidden>Aucun modèle pour l'instant. Créez-en un ci-dessus, ou ajoutez un article de la liste à un modèle via l'icône <span class="ms" style="font-size:16px;vertical-align:-3px">bookmark_add</span>.</p>
+  </div>
 </main>
 
 <main id="view-archives" class="view" hidden>
-  <div class="section-header">
-    <h2>Archives</h2>
+  <header class="compact-header">
+    <img src="icons/icon-192.png" alt="" class="compact-logo">
+    <div class="compact-titles">
+      <h1 class="compact-title">Archives</h1>
+      <p class="compact-stats" id="stats-archives"></p>
+    </div>
+    <button type="button" class="btn-settings" title="Réglages de connexion"><span class="ms">settings</span></button>
+  </header>
+
+  <div class="view-scroll">
+    <p class="archives-intro">Les articles achetés puis archivés restent ici ; vous pouvez les remettre dans la liste active.</p>
+    <div id="archives-contenu"></div>
+    <p id="archives-vide" class="empty-state-inline" hidden>Aucun article archivé.</p>
   </div>
-  <div id="archives-contenu"></div>
-  <p id="archives-vide" class="empty-state" hidden>Aucun article archivé.</p>
 </main>
 
 <nav class="tab-bar">
   <button class="tab-btn active" data-tab="liste">
-    <span class="tab-icon">🛒</span><span>Liste</span>
+    <span class="tab-pill"><span class="ms msf tab-icon">checklist</span></span>
+    <span class="tab-label">Liste</span>
   </button>
   <button class="tab-btn" data-tab="modeles">
-    <span class="tab-icon">⭐</span><span>Modèles</span>
+    <span class="tab-pill"><span class="ms tab-icon">bookmarks</span></span>
+    <span class="tab-label">Modèles</span>
   </button>
   <button class="tab-btn" data-tab="archives">
-    <span class="tab-icon">📦</span><span>Archives</span>
+    <span class="tab-pill"><span class="ms tab-icon">inventory_2</span></span>
+    <span class="tab-label">Archives</span>
   </button>
 </nav>
 
 <div id="toast" class="toast" hidden>
-  <span id="toast-text"></span>
+  <span class="ms toast-icon" id="toast-icon">check_circle</span>
+  <span id="toast-text" class="toast-text"></span>
   <button id="toast-undo" class="toast-undo">Annuler</button>
 </div>
 
 <div id="modal-modele" class="modal" hidden>
   <div class="modal-card">
-    <h3>Ajouter à un modèle</h3>
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3>Ajouter à un modèle</h3>
+      <button type="button" id="modal-fermer" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <p class="modal-soustitre" id="modal-soustitre"></p>
     <div id="modal-modele-liste" class="modal-modele-liste"></div>
-    <form id="form-modal-nouveau-modele" autocomplete="off">
+    <form id="form-modal-nouveau-modele" class="modal-nouveau-modele" autocomplete="off">
       <input id="modal-input-nouveau-modele" type="text" placeholder="Ou nouveau modèle…">
-      <button type="submit" class="btn-secondary">Créer et ajouter</button>
+      <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">add</span>Créer</button>
     </form>
-    <button id="modal-fermer" class="btn-text">Fermer</button>
   </div>
 </div>
 
 <div id="screen-config" class="config-screen" hidden>
-  <div class="config-card">
-    <h2>Connexion à votre liste</h2>
-    <p>Demandez l'URL de connexion à la personne qui a configuré l'application, puis collez-la ci-dessous. À faire une seule fois sur cet appareil, elle restera enregistrée ensuite.</p>
-    <form id="form-config" autocomplete="off">
-      <input id="config-input-url" type="url" placeholder="https://script.google.com/macros/s/…/exec" required>
-      <p id="config-erreur" class="config-erreur" hidden></p>
-      <button type="submit" class="btn-primary">Enregistrer</button>
-      <button type="button" id="config-forcer" class="btn-text" hidden>Enregistrer quand même</button>
-      <button type="button" id="config-annuler" class="btn-text" hidden>Annuler</button>
-    </form>
+  <div class="config-wrap">
+    <img src="icons/icon-192.png" alt="Rue Felix" class="config-logo">
+    <div class="config-card">
+      <h2>Connexion</h2>
+      <p>Collez l'adresse de votre liste partagée pour synchroniser cet appareil avec le reste du foyer.</p>
+      <form id="form-config" autocomplete="off">
+        <label class="config-label" for="config-input-url">Adresse de la liste</label>
+        <div class="config-input-row">
+          <span class="ms">link</span>
+          <input id="config-input-url" type="url" placeholder="https://script.google.com/macros/s/…/exec" required>
+        </div>
+        <p id="config-erreur" class="config-erreur" hidden></p>
+        <button type="submit" class="btn-pill btn-pill-full">Enregistrer</button>
+        <button type="button" id="config-forcer" class="btn-text" hidden>Enregistrer quand même</button>
+        <button type="button" id="config-annuler" class="btn-text" hidden>Annuler</button>
+      </form>
+      <p class="config-note">L'adresse est conservée sur cet appareil uniquement.</p>
+    </div>
   </div>
 </div>
 
