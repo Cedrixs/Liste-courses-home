@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liste-courses-v3';
+const CACHE_NAME = 'liste-courses-v4';
 const SHELL_FILES = [
   './',
   './index.html',
