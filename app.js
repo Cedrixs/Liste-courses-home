@@ -60,6 +60,15 @@ function saveQueue(queue) {
   localStorage.setItem('lc_queue', JSON.stringify(queue));
 }
 
+function loadDeselection() {
+  try { return JSON.parse(localStorage.getItem('lc_modele_deselection') || '{}'); }
+  catch (e) { return {}; }
+}
+
+function saveDeselection(deselection) {
+  localStorage.setItem('lc_modele_deselection', JSON.stringify(deselection));
+}
+
 function getAppsScriptUrl() {
   return localStorage.getItem('lc_apps_script_url') || '';
 }
@@ -246,21 +255,54 @@ function supprimerDuModele(modele, id) {
   queueOrSend('supprimerDuModele', { id });
 }
 
+function estArticleSelectionne(modele, nom) {
+  const deselection = loadDeselection();
+  return !(deselection[modele] || []).includes(nom.toLowerCase());
+}
+
+function definirSelectionArticle(modele, nom, selectionne) {
+  const deselection = loadDeselection();
+  const key = nom.toLowerCase();
+  const ensemble = new Set(deselection[modele] || []);
+  if (selectionne) ensemble.delete(key); else ensemble.add(key);
+  deselection[modele] = [...ensemble];
+  saveDeselection(deselection);
+}
+
+function toutSelectionner(modele) {
+  const deselection = loadDeselection();
+  delete deselection[modele];
+  saveDeselection(deselection);
+  renderModeles();
+}
+
+function enleverSelection(modele) {
+  const deselection = loadDeselection();
+  deselection[modele] = (state.modeles[modele] || []).map(it => it.nom.toLowerCase());
+  saveDeselection(deselection);
+  renderModeles();
+}
+
 function ajouterDepuisModele(modele) {
-  const items = state.modeles[modele] || [];
+  const items = (state.modeles[modele] || []).filter(item => estArticleSelectionne(modele, item.nom));
+  if (items.length === 0) {
+    showToast('Aucun article sélectionné dans ce modèle');
+    return;
+  }
   const nomsActifs = new Set(state.liste.map(it => it.nom.toLowerCase()));
   let compte = 0;
   items.forEach(item => {
     if (nomsActifs.has(item.nom.toLowerCase())) return;
+    const id = uuid();
     const now = new Date().toISOString();
-    state.liste.push({ id: uuid(), nom: item.nom, categorie: item.categorie, statut: 'actif', dateAjout: now, dateMaj: now });
+    state.liste.push({ id, nom: item.nom, categorie: item.categorie, statut: 'actif', dateAjout: now, dateMaj: now });
     nomsActifs.add(item.nom.toLowerCase());
+    queueOrSend('ajouterArticle', { id, nom: item.nom, categorie: item.categorie });
     compte++;
   });
   saveCache();
   renderListe();
-  queueOrSend('ajouterDepuisModele', { modele });
-  showToast(compte > 0 ? `${compte} article(s) ajouté(s) depuis « ${modele} »` : 'Tous les articles y sont déjà');
+  showToast(compte > 0 ? `${compte} article(s) ajouté(s) depuis « ${modele} »` : 'Tous les articles sélectionnés y sont déjà');
 }
 
 // ---- Rendu ----
@@ -337,11 +379,19 @@ function renderModeles() {
           <strong>${escapeHtml(modele)}</strong>
           <button class="btn-secondary" style="width:auto;padding:8px 12px;" data-action="ajouter-depuis-modele">Ajouter à la liste</button>
         </div>
-        ${items.length === 0 ? '<p class="archive-date">Aucun article dans ce modèle pour l\'instant.</p>' : items.map(item => `
-          <div class="modele-item" data-id="${item.id}">
-            <span>${escapeHtml(item.nom)}</span>
+        ${items.length === 0 ? '<p class="archive-date">Aucun article dans ce modèle pour l\'instant.</p>' : `
+        <div class="modele-selection-liens">
+          <button type="button" class="lien-selection" data-action="tout-selectionner">Tout sélectionner</button>
+          <button type="button" class="lien-selection" data-action="enlever-selection">Enlever sélection</button>
+        </div>
+        ${items.map(item => `
+          <div class="modele-item" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}">
+            <label class="modele-item-label">
+              <input type="checkbox" class="modele-checkbox" ${estArticleSelectionne(modele, item.nom) ? 'checked' : ''}>
+              <span>${escapeHtml(item.nom)}</span>
+            </label>
             <button class="icon-btn" data-action="supprimer-du-modele" title="Retirer du modèle">✕</button>
-          </div>`).join('')}
+          </div>`).join('')}`}
       </div>`;
   }).join('');
 }
@@ -535,7 +585,17 @@ function setupEventListeners() {
     else if (action === 'supprimer-du-modele') {
       const id = e.target.closest('.modele-item').dataset.id;
       supprimerDuModele(modele, id);
-    }
+    } else if (action === 'tout-selectionner') toutSelectionner(modele);
+    else if (action === 'enlever-selection') enleverSelection(modele);
+  });
+
+  document.getElementById('modeles-contenu').addEventListener('change', (e) => {
+    const checkbox = e.target.closest('.modele-checkbox');
+    if (!checkbox) return;
+    const carte = e.target.closest('.modele-carte');
+    const itemEl = e.target.closest('.modele-item');
+    if (!carte || !itemEl) return;
+    definirSelectionArticle(carte.dataset.modele, itemEl.dataset.nom, checkbox.checked);
   });
 
   document.getElementById('archives-contenu').addEventListener('click', (e) => {

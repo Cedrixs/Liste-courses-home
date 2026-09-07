@@ -167,11 +167,23 @@ input[type="text"], select {
 }
 .modele-entete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .modele-entete strong { flex: 1; }
+.modele-selection-liens { display: flex; gap: 16px; margin-bottom: 6px; }
+.lien-selection {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--green-dark);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .modele-item {
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 0; font-size: 0.92rem; border-top: 1px solid var(--border);
 }
 .modele-item:first-of-type { border-top: none; }
+.modele-item-label { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
+.modele-checkbox { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--green); }
 
 .archive-row {
   display: flex; align-items: center; gap: 10px;
