@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liste-courses-v2';
+const CACHE_NAME = 'liste-courses-v3';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -8,6 +8,10 @@ const SHELL_FILES = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-192-maskable.png',
+  './icons/icon-512-maskable.png',
+  './icons/apple-touch-icon.png',
+  './icons/favicon-32.png',
 ];
 
 self.addEventListener('install', (event) => {
