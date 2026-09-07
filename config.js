@@ -4,10 +4,10 @@
 const CONFIG = {
   CATEGORIES: [
     'Fruits & Légumes',
-    'Crèmerie',
+    'Laitage & Fromage',
     'Viande & Poisson',
-    'Épicerie',
-    'Boulangerie',
+    'Sec',
+    'Traiteur',
     'Surgelés',
     'Boissons',
     'Hygiène',
