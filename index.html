@@ -18,6 +18,7 @@
 <header class="app-header">
   <h1>Liste de courses</h1>
   <span id="offline-dot" class="offline-dot" hidden title="Hors ligne"></span>
+  <button id="btn-reglages" class="header-icon-btn" title="Réglages de connexion">⚙️</button>
 </header>
 
 <div id="offline-banner" class="offline-banner" hidden>
@@ -86,6 +87,20 @@
       <button type="submit" class="btn-secondary">Créer et ajouter</button>
     </form>
     <button id="modal-fermer" class="btn-text">Fermer</button>
+  </div>
+</div>
+
+<div id="screen-config" class="config-screen" hidden>
+  <div class="config-card">
+    <h2>Connexion à votre liste</h2>
+    <p>Demandez l'URL de connexion à la personne qui a configuré l'application, puis collez-la ci-dessous. À faire une seule fois sur cet appareil, elle restera enregistrée ensuite.</p>
+    <form id="form-config" autocomplete="off">
+      <input id="config-input-url" type="url" placeholder="https://script.google.com/macros/s/…/exec" required>
+      <p id="config-erreur" class="config-erreur" hidden></p>
+      <button type="submit" class="btn-primary">Enregistrer</button>
+      <button type="button" id="config-forcer" class="btn-text" hidden>Enregistrer quand même</button>
+      <button type="button" id="config-annuler" class="btn-text" hidden>Annuler</button>
+    </form>
   </div>
 </div>
 

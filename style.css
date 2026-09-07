@@ -34,6 +34,15 @@ body {
   width: 10px; height: 10px; border-radius: 50%;
   background: #f1c40f;
 }
+.header-icon-btn {
+  border: none;
+  background: none;
+  color: white;
+  font-size: 1.15rem;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.9;
+}
 
 .offline-banner {
   background: #fdf3d0;
@@ -236,3 +245,25 @@ input[type="text"], select {
   cursor: pointer;
 }
 #form-modal-nouveau-modele { display: flex; gap: 8px; margin-bottom: 10px; }
+
+.config-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 20px;
+}
+.config-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 22px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.1);
+}
+.config-card h2 { margin-top: 0; font-size: 1.15rem; }
+.config-card p { color: var(--muted); font-size: 0.92rem; line-height: 1.4; }
+.config-card form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.config-erreur { color: var(--danger); font-size: 0.85rem; margin: 0; }

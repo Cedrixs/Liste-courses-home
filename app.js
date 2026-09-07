@@ -60,18 +60,30 @@ function saveQueue(queue) {
   localStorage.setItem('lc_queue', JSON.stringify(queue));
 }
 
+function getAppsScriptUrl() {
+  return localStorage.getItem('lc_apps_script_url') || '';
+}
+
+function setAppsScriptUrl(url) {
+  localStorage.setItem('lc_apps_script_url', url.trim());
+}
+
 // ---- Réseau ----
 
 async function apiGet(action, params = {}) {
+  const base = getAppsScriptUrl();
+  if (!base) throw new Error('URL non configurée');
   const qs = new URLSearchParams({ action, ...params }).toString();
-  const res = await fetch(`${CONFIG.APPS_SCRIPT_URL}?${qs}`);
+  const res = await fetch(`${base}?${qs}`);
   const body = await res.json();
   if (!body.ok) throw new Error(body.error || 'Erreur serveur');
   return body.data;
 }
 
 async function apiPost(action, payload = {}) {
-  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+  const base = getAppsScriptUrl();
+  if (!base) throw new Error('URL non configurée');
+  const res = await fetch(base, {
     method: 'POST',
     body: JSON.stringify({ action, ...payload }),
   });
@@ -88,7 +100,7 @@ function queueOrSend(action, payload) {
 }
 
 async function flushQueue() {
-  if (isFlushing) return;
+  if (isFlushing || !getAppsScriptUrl()) return;
   isFlushing = true;
   try {
     let queue = loadQueue();
@@ -112,6 +124,7 @@ async function flushQueue() {
 }
 
 async function refreshFromServer() {
+  if (!getAppsScriptUrl()) return;
   if (loadQueue().length > 0) return; // des actions locales n'ont pas encore été envoyées
   try {
     const [liste, modeles, archives] = await Promise.all([
@@ -419,6 +432,45 @@ function suggestionsLocales(q) {
   return [...vus.values()].slice(0, 8);
 }
 
+// ---- Écran de configuration (URL du backend) ----
+
+function ouvrirEcranConfig({ obligatoire }) {
+  document.getElementById('config-input-url').value = obligatoire ? '' : getAppsScriptUrl();
+  document.getElementById('config-erreur').hidden = true;
+  document.getElementById('config-forcer').hidden = true;
+  document.getElementById('config-annuler').hidden = obligatoire;
+  document.getElementById('screen-config').hidden = false;
+}
+
+function fermerEcranConfig() {
+  document.getElementById('screen-config').hidden = true;
+}
+
+async function validerEtEnregistrerUrl(url, { forcer }) {
+  url = url.trim();
+  if (!url) return;
+  const erreurEl = document.getElementById('config-erreur');
+  const forcerBtn = document.getElementById('config-forcer');
+  if (!forcer) {
+    erreurEl.hidden = true;
+    forcerBtn.hidden = true;
+    try {
+      const res = await fetch(`${url}?action=getListe`);
+      const body = await res.json();
+      if (!body.ok) throw new Error(body.error || 'Réponse invalide');
+    } catch (err) {
+      erreurEl.textContent = "Impossible de joindre cette adresse. Vérifiez l'URL, ou enregistrez quand même si vous êtes hors ligne pour le moment.";
+      erreurEl.hidden = false;
+      forcerBtn.hidden = false;
+      return;
+    }
+  }
+  setAppsScriptUrl(url);
+  fermerEcranConfig();
+  await refreshFromServer();
+  flushQueue();
+}
+
 // ---- Navigation par onglets ----
 
 function activerOnglet(nom) {
@@ -510,6 +562,19 @@ function setupEventListeners() {
 
   document.getElementById('modal-fermer').addEventListener('click', fermerModalModele);
 
+  document.getElementById('btn-reglages').addEventListener('click', () => ouvrirEcranConfig({ obligatoire: false }));
+
+  document.getElementById('form-config').addEventListener('submit', (e) => {
+    e.preventDefault();
+    validerEtEnregistrerUrl(document.getElementById('config-input-url').value, { forcer: false });
+  });
+
+  document.getElementById('config-forcer').addEventListener('click', () => {
+    validerEtEnregistrerUrl(document.getElementById('config-input-url').value, { forcer: true });
+  });
+
+  document.getElementById('config-annuler').addEventListener('click', fermerEcranConfig);
+
   window.addEventListener('online', () => { updateOfflineBanner(); flushQueue(); refreshFromServer(); });
   window.addEventListener('offline', updateOfflineBanner);
   document.addEventListener('visibilitychange', () => {
@@ -526,7 +591,12 @@ async function init() {
   renderAll();
   setupEventListeners();
   updateOfflineBanner();
-  await refreshFromServer();
+
+  if (!getAppsScriptUrl()) {
+    ouvrirEcranConfig({ obligatoire: true });
+  } else {
+    await refreshFromServer();
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

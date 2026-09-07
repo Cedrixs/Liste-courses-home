@@ -1,7 +1,7 @@
-// Collez ici l'URL de votre déploiement Google Apps Script (se termine par /exec).
-// Voir README.md pour la procédure complète.
+// L'URL du backend Apps Script n'est plus stockée ici (ce fichier est public sur
+// GitHub Pages) : chaque appareil la demande à l'ouverture et la garde en mémoire
+// localement. Voir README.md pour la procédure complète.
 const CONFIG = {
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/REMPLACER_PAR_VOTRE_ID/exec',
   CATEGORIES: [
     'Fruits & Légumes',
     'Crèmerie',
