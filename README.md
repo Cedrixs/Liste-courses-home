@@ -51,6 +51,19 @@ C'est cette URL que vous et les autres membres du foyer allez utiliser. Vous pou
 
 **À la toute première ouverture**, l'appli affiche un écran demandant l'URL de votre déploiement Apps Script (celle copiée à l'étape 1). Envoyez-la aux autres membres du foyer par un moyen privé (SMS, message chiffré...), jamais par un canal public. Une fois saisie, elle est enregistrée sur l'appareil et ne sera plus redemandée. Un bouton ⚙️ en haut de l'écran permet de la modifier plus tard (par exemple si vous redéployez le script et obtenez une nouvelle URL).
 
+## Mettre à jour l'appli après un changement de code
+
+L'appli fonctionne en "réseau d'abord" : à chaque ouverture, si vous avez du réseau, elle récupère la dernière version en ligne. Mais le tout premier chargement d'une mise à jour se fait encore avec l'ancien service worker (le programme qui gère le cache), donc :
+
+1. Attendez ~1 minute après un push sur GitHub que **GitHub Pages** ait fini de redéployer (visible dans l'onglet **Actions** du dépôt).
+2. **Fermez complètement l'appli** sur le téléphone (pas juste la mettre en arrière-plan : sur Android comme sur iPhone, balayez la carte de l'appli dans le sélecteur de tâches pour la fermer).
+3. **Rouvrez-la** : ce premier réveil installe le nouveau service worker en tâche de fond.
+4. **Fermez et rouvrez une seconde fois** pour voir effectivement la mise à jour à l'écran.
+
+En dernier recours (si ça ne suffit toujours pas) : réglages du navigateur > effacer les données du site pour l'adresse GitHub Pages. Cela réinitialise aussi l'URL Apps Script enregistrée, à ressaisir ensuite via l'écran ⚙️.
+
+À noter aussi : une **icône d'appli déjà posée sur l'écran d'accueil n'est en général pas remplacée automatiquement** par iOS/Android, même après une mise à jour du logo. Si l'icône ne change pas, supprimez le raccourci existant et refaites "Ajouter à l'écran d'accueil".
+
 ## Sécurité de l'URL Apps Script
 
 - Le dépôt GitHub étant public, rien de ce qu'il contient (code, `config.js`, historique des commits) ne doit jamais inclure cette URL.
@@ -67,12 +80,19 @@ C'est cette URL que vous et les autres membres du foyer allez utiliser. Vous pou
 ## Structure du projet
 
 ```
-index.html          Page principale de l'appli
-style.css           Mise en forme
-app.js              Logique (affichage, actions, file d'attente hors-ligne)
-config.js           Liste des catégories (aucune donnée sensible)
-manifest.json        Manifeste PWA (installation sur l'écran d'accueil)
-sw.js                Service worker (mise en cache pour un chargement rapide et hors-ligne)
-icons/               Icônes de l'appli
-apps-script/Code.gs  Code du backend Google Apps Script à coller dans votre Google Sheet
+index.html                    Page principale de l'appli
+style.css                     Mise en forme
+app.js                        Logique (affichage, actions, file d'attente hors-ligne)
+config.js                     Liste des catégories (aucune donnée sensible)
+manifest.json                 Manifeste PWA (installation sur l'écran d'accueil)
+sw.js                         Service worker (réseau d'abord, repli sur le cache hors-ligne)
+icons/                        Icônes de l'appli (dont les variantes "maskable" pour Android)
+apps-script/Code.gs           Code du backend Google Apps Script à coller dans votre Google Sheet
 ```
+
+## Journal des évolutions récentes
+
+- **Sélection par cases à cocher dans les modèles récurrents** : chaque article d'un modèle peut être coché/décoché avant de l'ajouter à la liste (tout coché par défaut), avec des liens "Tout sélectionner" / "Enlever sélection" par modèle. La sélection est mémorisée sur l'appareil.
+- **Écran de connexion à la première ouverture** : l'URL Apps Script n'est plus stockée dans le dépôt (public) mais saisie une fois sur chaque appareil et conservée en local. Modifiable via l'icône ⚙️.
+- **Service worker en réseau d'abord** : les mises à jour de l'appli se propagent désormais aux téléphones sans manipulation particulière (voir "Mettre à jour l'appli" ci-dessus pour la toute première fois après ce changement).
+- **Nouveau logo Rue Felix** : icônes, couleur de thème et écran de démarrage mis à jour avec la nouvelle identité visuelle.
