@@ -40,8 +40,14 @@
         <select id="input-categorie" class="add-bar-categorie" aria-label="Catégorie"></select>
         <span class="ms add-bar-chevron">expand_more</span>
       </div>
+      <button type="button" id="btn-toggle-quantite" class="add-bar-quantite-toggle" aria-label="Ajouter une quantité" title="Ajouter une quantité"><span class="ms">scale</span></button>
       <button type="submit" class="add-bar-submit" aria-label="Ajouter"><span class="ms">add</span></button>
     </form>
+    <div id="quantite-row" class="quantite-row" hidden>
+      <span class="ms quantite-row-icon">scale</span>
+      <input id="input-quantite" type="text" placeholder="Quantité (optionnel) : 500g, x6, 1L…">
+      <button type="button" id="btn-fermer-quantite" class="quantite-row-close" aria-label="Retirer la quantité"><span class="ms">close</span></button>
+    </div>
     <div id="suggestions" class="suggestions" hidden></div>
   </header>
 
@@ -131,6 +137,25 @@
       <input id="modal-input-nouveau-modele" type="text" placeholder="Ou nouveau modèle…">
       <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">add</span>Créer</button>
     </form>
+  </div>
+</div>
+
+<div id="modal-reference" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3>Nouvel article</h3>
+      <button type="button" id="modal-reference-fermer" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <p class="modal-soustitre" id="modal-reference-soustitre"></p>
+    <div class="modal-reference-categorie">
+      <label for="modal-reference-categorie-select">Catégorie</label>
+      <select id="modal-reference-categorie-select"></select>
+    </div>
+    <div class="modal-reference-actions">
+      <button type="button" id="modal-reference-non" class="btn-pill btn-pill-outline">Non merci</button>
+      <button type="button" id="modal-reference-oui" class="btn-pill"><span class="ms">library_add</span>Ajouter</button>
+    </div>
   </div>
 </div>
 

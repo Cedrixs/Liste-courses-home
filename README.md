@@ -92,6 +92,9 @@ apps-script/Code.gs           Code du backend Google Apps Script à coller dans 
 
 ## Journal des évolutions récentes
 
+- **Autocomplétion avec table de référence des articles** : en tapant un article, un menu déroulant propose des suggestions (issues d'une nouvelle table de référence pré-remplie d'articles courants, et de votre historique) et remplit automatiquement le rayon correspondant. Si l'article tapé est inconnu, une popup propose de l'ajouter à la table de référence (avec sa catégorie) pour le retrouver plus vite la prochaine fois ; sinon la sélection manuelle du rayon fonctionne comme avant.
+- **Quantité optionnelle par article** : une icône ⚖️ à côté du champ d'ajout permet de préciser une quantité en texte libre (ex : "500g", "x6", "1L"). Si elle est renseignée, un petit picto apparaît sur la ligne de l'article ; un clic dessus affiche temporairement la valeur saisie.
+  > Ces deux évolutions ajoutent un nouvel onglet `Reference` et une colonne `quantite` côté Google Sheet : pensez à recoller le nouveau [`apps-script/Code.gs`](apps-script/Code.gs) dans votre Apps Script et à redéployer une nouvelle version (voir "Étape 1" ci-dessus). Rien à faire sur la feuille elle-même, la mise à jour se fait toute seule au premier appel.
 - **Sélection par cases à cocher dans les modèles récurrents** : chaque article d'un modèle peut être coché/décoché avant de l'ajouter à la liste (tout coché par défaut), avec des liens "Tout sélectionner" / "Enlever sélection" par modèle. La sélection est mémorisée sur l'appareil.
 - **Écran de connexion à la première ouverture** : l'URL Apps Script n'est plus stockée dans le dépôt (public) mais saisie une fois sur chaque appareil et conservée en local. Modifiable via l'icône ⚙️.
 - **Service worker en réseau d'abord** : les mises à jour de l'appli se propagent désormais aux téléphones sans manipulation particulière (voir "Mettre à jour l'appli" ci-dessus pour la toute première fois après ce changement).
