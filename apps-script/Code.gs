@@ -99,7 +99,17 @@ function getSheet_(name) {
   return sheet;
 }
 
+// Les vérifications de structure (onglets, colonnes, pré-remplissage) n'ont besoin
+// de tourner qu'une fois après un déploiement : ce drapeau, mémorisé au niveau du
+// script, évite de les relancer (et de ralentir) à chaque requête. Si une future
+// mise à jour ajoute une nouvelle migration, incrémenter ce nom pour la forcer à
+// se rejouer une fois.
+const SETUP_FLAG = 'setupComplete_v2';
+
 function ensureSetup() {
+  const proprietes = PropertiesService.getScriptProperties();
+  if (proprietes.getProperty(SETUP_FLAG) === 'true') return;
+
   Object.keys(HEADERS).forEach(getSheet_);
   migrerEntete_(SHEET_LISTE, 'quantite');
   migrerEntete_(SHEET_ARCHIVES, 'quantite');
@@ -109,6 +119,8 @@ function ensureSetup() {
   if (defaultSheet && defaultSheet.getLastRow() === 0 && defaultSheet.getLastColumn() <= 1) {
     SpreadsheetApp.getActiveSpreadsheet().deleteSheet(defaultSheet);
   }
+
+  proprietes.setProperty(SETUP_FLAG, 'true');
 }
 
 // Ajoute une colonne d'en-tête manquante sur une feuille déjà déployée avant cette
