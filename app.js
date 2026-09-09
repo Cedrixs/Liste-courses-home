@@ -2,6 +2,7 @@ const state = {
   liste: [],
   modeles: {},
   archives: [],
+  reference: [],
 };
 
 let modalCurrentItem = null;
@@ -55,6 +56,7 @@ function loadCache() {
     state.liste = JSON.parse(localStorage.getItem('lc_liste') || '[]');
     state.modeles = JSON.parse(localStorage.getItem('lc_modeles') || '{}');
     state.archives = JSON.parse(localStorage.getItem('lc_archives') || '[]');
+    state.reference = JSON.parse(localStorage.getItem('lc_reference') || '[]');
   } catch (e) { /* cache corrompu, on repart de zéro */ }
 }
 
@@ -62,6 +64,7 @@ function saveCache() {
   localStorage.setItem('lc_liste', JSON.stringify(state.liste));
   localStorage.setItem('lc_modeles', JSON.stringify(state.modeles));
   localStorage.setItem('lc_archives', JSON.stringify(state.archives));
+  localStorage.setItem('lc_reference', JSON.stringify(state.reference));
 }
 
 function loadQueue() {
@@ -149,12 +152,13 @@ async function refreshFromServer() {
   if (!getAppsScriptUrl()) return;
   if (loadQueue().length > 0) return; // des actions locales n'ont pas encore été envoyées
   try {
-    const [liste, modeles, archives] = await Promise.all([
-      apiGet('getListe'), apiGet('getModeles'), apiGet('getArchives'),
+    const [liste, modeles, archives, reference] = await Promise.all([
+      apiGet('getListe'), apiGet('getModeles'), apiGet('getArchives'), apiGet('getReference'),
     ]);
     state.liste = liste;
     state.modeles = modeles;
     state.archives = archives;
+    state.reference = reference;
     saveCache();
     renderAll();
   } catch (err) {
@@ -180,15 +184,16 @@ function updateOfflineBanner() {
 
 // ---- Actions : Liste ----
 
-function ajouterArticle(nom, categorie) {
+function ajouterArticle(nom, categorie, quantite) {
   nom = nom.trim();
   if (!nom) return;
+  quantite = (quantite || '').trim();
   const id = uuid();
   const now = new Date().toISOString();
-  state.liste.push({ id, nom, categorie, statut: 'actif', dateAjout: now, dateMaj: now });
+  state.liste.push({ id, nom, categorie, quantite, statut: 'actif', dateAjout: now, dateMaj: now });
   saveCache();
   renderListe();
-  queueOrSend('ajouterArticle', { id, nom, categorie });
+  queueOrSend('ajouterArticle', { id, nom, categorie, quantite });
   showToast(`« ${nom} » ajouté`, () => {
     state.liste = state.liste.filter(it => it.id !== id);
     saveCache(); renderListe();
@@ -315,6 +320,23 @@ function ajouterDepuisModele(modele) {
   showToast(compte > 0 ? `${compte} article(s) ajouté(s) depuis « ${modele} »` : 'Tous les articles sélectionnés y sont déjà');
 }
 
+// ---- Actions : Table de référence ----
+
+function trouverReference(nom) {
+  const q = nom.trim().toLowerCase();
+  return state.reference.find(it => String(it.nom).toLowerCase() === q);
+}
+
+function ajouterReference(nom, categorie) {
+  nom = nom.trim();
+  if (!nom || trouverReference(nom)) return;
+  const id = uuid();
+  state.reference.push({ id, nom, categorie });
+  saveCache();
+  queueOrSend('ajouterReference', { id, nom, categorie });
+  showToast(`« ${nom} » ajouté à la table de référence`, null, 'library_add');
+}
+
 // ---- Rendu ----
 
 function renderAll() {
@@ -391,10 +413,14 @@ function renderListe() {
 
 function renderItemRow(item) {
   const achete = item.statut === 'achete';
+  const badgeQuantite = item.quantite
+    ? `<button class="item-qte-badge" data-action="voir-quantite" title="Voir la quantité"><span class="ms">scale</span></button>`
+    : '';
   return `
-    <div class="item-row ${achete ? 'achete' : ''}" data-id="${item.id}">
+    <div class="item-row ${achete ? 'achete' : ''}" data-id="${item.id}" data-quantite="${escapeHtml(item.quantite || '')}">
       <button class="item-checkbox ${achete ? 'checked' : ''}" data-action="toggle" title="Marquer acheté">${achete ? '<span class="ms msf">check</span>' : ''}</button>
       <span class="item-nom">${escapeHtml(item.nom)}</span>
+      ${badgeQuantite}
       <div class="item-actions">
         <button class="icon-btn" data-action="modele" title="Ajouter à un modèle"><span class="ms">bookmark_add</span></button>
         <button class="icon-btn" data-action="archiver" title="Archiver"><span class="ms">inventory_2</span></button>
@@ -529,6 +555,20 @@ function fermerModalModele() {
   document.getElementById('modal-input-nouveau-modele').value = '';
 }
 
+// ---- Champ quantité (repliable) ----
+
+function ouvrirQuantite() {
+  document.getElementById('quantite-row').hidden = false;
+  document.getElementById('btn-toggle-quantite').classList.add('actif');
+  document.getElementById('input-quantite').focus();
+}
+
+function fermerQuantite() {
+  document.getElementById('quantite-row').hidden = true;
+  document.getElementById('btn-toggle-quantite').classList.remove('actif');
+  document.getElementById('input-quantite').value = '';
+}
+
 // ---- Suggestions / autocomplétion ----
 
 const chercherSuggestions = debounce(async (q) => {
@@ -554,11 +594,30 @@ const chercherSuggestions = debounce(async (q) => {
 function suggestionsLocales(q) {
   const query = q.toLowerCase();
   const vus = new Map();
-  [...state.liste, ...state.archives, ...Object.values(state.modeles).flat()].forEach(item => {
+  [...state.reference, ...state.liste, ...state.archives, ...Object.values(state.modeles).flat()].forEach(item => {
     if (!item.nom || vus.has(item.nom.toLowerCase())) return;
     if (item.nom.toLowerCase().includes(query)) vus.set(item.nom.toLowerCase(), { nom: item.nom, categorie: item.categorie || 'Autre' });
   });
   return [...vus.values()].slice(0, 8);
+}
+
+// ---- Modal "nouvel article -> ajouter à la référence" ----
+
+let referenceCandidat = null;
+
+function proposerAjoutReference(nom, categorie) {
+  if (trouverReference(nom)) return;
+  referenceCandidat = { nom, categorie };
+  document.getElementById('modal-reference-soustitre').textContent =
+    `« ${nom} » n'est pas encore dans votre table de référence. L'ajouter permet de le retrouver plus vite la prochaine fois, avec sa catégorie.`;
+  const select = document.getElementById('modal-reference-categorie-select');
+  select.innerHTML = CONFIG.CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${c === categorie ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  document.getElementById('modal-reference').hidden = false;
+}
+
+function fermerModalReference() {
+  document.getElementById('modal-reference').hidden = true;
+  referenceCandidat = null;
 }
 
 // ---- Écran de configuration (URL du backend) ----
@@ -618,14 +677,40 @@ function setupEventListeners() {
     e.preventDefault();
     const nomInput = document.getElementById('input-nom');
     const categorie = document.getElementById('input-categorie').value;
-    ajouterArticle(nomInput.value, categorie);
+    const nom = nomInput.value.trim();
+    if (!nom) return;
+    const quantite = document.getElementById('input-quantite').value;
+    const estNouveau = !trouverReference(nom);
+    ajouterArticle(nom, categorie, quantite);
     nomInput.value = '';
     document.getElementById('suggestions').hidden = true;
+    fermerQuantite();
+    if (estNouveau) proposerAjoutReference(nom, categorie);
   });
 
   document.getElementById('input-nom').addEventListener('input', (e) => {
     chercherSuggestions(e.target.value.trim());
   });
+
+  document.getElementById('btn-toggle-quantite').addEventListener('click', () => {
+    const row = document.getElementById('quantite-row');
+    if (row.hidden) ouvrirQuantite(); else fermerQuantite();
+  });
+
+  document.getElementById('btn-fermer-quantite').addEventListener('click', fermerQuantite);
+
+  document.getElementById('input-quantite').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('form-ajout').requestSubmit(); }
+  });
+
+  document.getElementById('modal-reference-oui').addEventListener('click', () => {
+    if (!referenceCandidat) return;
+    const categorie = document.getElementById('modal-reference-categorie-select').value;
+    ajouterReference(referenceCandidat.nom, categorie);
+    fermerModalReference();
+  });
+  document.getElementById('modal-reference-non').addEventListener('click', fermerModalReference);
+  document.getElementById('modal-reference-fermer').addEventListener('click', fermerModalReference);
 
   document.getElementById('suggestions').addEventListener('click', (e) => {
     const el = e.target.closest('.suggestion-item');
@@ -645,6 +730,8 @@ function setupEventListeners() {
     else if (action === 'modele') {
       const item = state.liste.find(it => it.id === id);
       if (item) ouvrirModalModele(item.nom, item.categorie);
+    } else if (action === 'voir-quantite') {
+      showToast(`Quantité : ${row.dataset.quantite}`, null, 'scale');
     }
   });
 

@@ -159,6 +159,37 @@ body {
 .add-bar-submit .ms { font-size: 26px; }
 .add-bar-submit:active { background: var(--navy-100); }
 
+.add-bar-quantite-toggle {
+  width: 50px; height: 50px; flex: none;
+  border: none; border-radius: 14px; background: #fff; color: var(--navy-700);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-floating); cursor: pointer; overflow: hidden;
+}
+.add-bar-quantite-toggle .ms { font-size: 22px; }
+.add-bar-quantite-toggle:active { background: var(--navy-100); }
+.add-bar-quantite-toggle.actif { background: var(--navy-700); color: #fff; }
+
+.quantite-row {
+  margin-top: 8px;
+  height: 46px;
+  background: rgba(255,255,255,.12);
+  border-radius: 12px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+}
+.quantite-row-icon { font-size: 19px; color: var(--navy-300); flex: none; }
+.quantite-row input {
+  flex: 1; min-width: 0; border: none; outline: none; background: none;
+  font-family: inherit; font-size: 15px; color: #fff;
+}
+.quantite-row input::placeholder { color: var(--navy-300); }
+.quantite-row-close {
+  width: 30px; height: 30px; flex: none; border: none; border-radius: 50%;
+  background: none; color: var(--navy-300); overflow: hidden;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.quantite-row-close .ms { font-size: 18px; }
+
 .suggestions {
   position: absolute;
   left: 16px; right: 18px; top: 100%;
@@ -278,6 +309,14 @@ body {
   background: #EFEDE8; border-color: #E5E0D7; box-shadow: none;
 }
 .item-row.achete .item-nom { color: var(--text-muted); text-decoration: line-through; text-decoration-color: #BFB8AD; }
+.item-qte-badge {
+  width: 32px; height: 32px; flex: none; padding: 0;
+  border: none; border-radius: 50%; background: var(--navy-100); color: var(--navy-700);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; overflow: hidden;
+}
+.item-qte-badge .ms { font-size: 17px; }
+.item-row.achete .item-qte-badge { background: #E5E0D7; color: var(--text-muted); }
 .item-actions { display: flex; gap: 0; flex: none; }
 .icon-btn {
   width: 40px; height: 40px; flex: none;
@@ -472,6 +511,22 @@ body {
   flex: 1; height: 46px; border: 1.5px solid var(--navy-200); border-radius: 12px;
   padding: 0 14px; font-family: inherit; font-size: 15.5px; color: var(--text); outline: none;
 }
+
+/* ---- Modale "ajouter à la référence" ---- */
+
+.modal-reference-categorie {
+  padding: 4px 16px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.modal-reference-categorie label {
+  font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-secondary);
+}
+.modal-reference-categorie select {
+  height: 48px; border: 1.5px solid var(--navy-200); border-radius: 12px;
+  padding: 0 14px; font-family: inherit; font-size: 15.5px; color: var(--text); background: #fff;
+}
+.modal-reference-actions { display: flex; gap: 10px; padding: 4px 16px 0; }
+.modal-reference-actions .btn-pill { flex: 1; justify-content: center; }
 
 /* ---- Écran de connexion ---- */
 
