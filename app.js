@@ -8,6 +8,7 @@ const state = {
 let modalCurrentItem = null;
 let toastTimer = null;
 let isFlushing = false;
+let dernierRafraichissementArrierePlan = 0;
 
 // ---- Utils ----
 
@@ -23,11 +24,6 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
-}
-
-function debounce(fn, delay) {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
 }
 
 function formatDateHeure(iso) {
@@ -166,6 +162,17 @@ async function refreshFromServer() {
   } finally {
     updateOfflineBanner();
   }
+}
+
+// Recharge liste/modèles/archives/référence en tâche de fond (sans bloquer l'UI),
+// pour que l'autocomplétion locale reste à jour si un autre membre du foyer a
+// ajouté un article entre-temps. Limité dans le temps pour éviter de solliciter
+// le backend à chaque ouverture du champ d'ajout.
+function rafraichirReferenceEnArrierePlan() {
+  const maintenant = Date.now();
+  if (maintenant - dernierRafraichissementArrierePlan < 20000) return;
+  dernierRafraichissementArrierePlan = maintenant;
+  refreshFromServer();
 }
 
 function updateOfflineBanner() {
@@ -570,26 +577,25 @@ function fermerQuantite() {
 }
 
 // ---- Suggestions / autocomplétion ----
+//
+// Recherche entièrement locale (dans le cache déjà chargé en mémoire) pour un
+// affichage instantané : un aller-retour réseau à chaque frappe serait bien trop
+// lent (le backend Apps Script répond typiquement en 1 à 3 secondes). Le cache
+// est tenu à jour par refreshFromServer(), appelée à l'ouverture de l'appli, à
+// chaque retour au premier plan, et en tâche de fond quand on ouvre le champ
+// d'ajout (voir rafraichirReferenceEnArrierePlan).
 
-const chercherSuggestions = debounce(async (q) => {
+function chercherSuggestions(q) {
   const conteneur = document.getElementById('suggestions');
   if (!q) { conteneur.hidden = true; return; }
-  let resultats = [];
-  try {
-    resultats = await apiGet('getSuggestions', { q });
-  } catch (err) {
-    resultats = suggestionsLocales(q);
-  }
-  // La recherche est asynchrone : si le champ a changé (ou a été vidé par un envoi
-  // du formulaire) entre-temps, on ignore ce résultat devenu obsolète.
-  if (document.getElementById('input-nom').value.trim() !== q) return;
+  const resultats = suggestionsLocales(q);
   if (resultats.length === 0) { conteneur.hidden = true; return; }
   conteneur.innerHTML = resultats.map(r => `
     <div class="suggestion-item" data-nom="${escapeHtml(r.nom)}" data-categorie="${escapeHtml(r.categorie)}">
       <span>${escapeHtml(r.nom)}</span><small>${escapeHtml(r.categorie)}</small>
     </div>`).join('');
   conteneur.hidden = false;
-}, 250);
+}
 
 function suggestionsLocales(q) {
   const query = q.toLowerCase();
@@ -691,6 +697,8 @@ function setupEventListeners() {
   document.getElementById('input-nom').addEventListener('input', (e) => {
     chercherSuggestions(e.target.value.trim());
   });
+
+  document.getElementById('input-nom').addEventListener('focus', rafraichirReferenceEnArrierePlan);
 
   document.getElementById('btn-toggle-quantite').addEventListener('click', () => {
     const row = document.getElementById('quantite-row');
