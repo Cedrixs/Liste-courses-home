@@ -465,6 +465,14 @@ body {
   background: rgba(255,255,255,.14); color: #fff; font-family: inherit;
   font-size: 14.5px; font-weight: 700; flex: none; cursor: pointer;
 }
+.toast-fermer {
+  width: 32px; height: 32px; flex: none; padding: 0;
+  border: none; border-radius: 50%; background: none; color: var(--navy-300);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; overflow: hidden;
+}
+.toast-fermer .ms { font-size: 19px; }
+.toast-fermer:active { background: rgba(255,255,255,.14); }
 
 /* ---- Modale "ajouter à un modèle" ---- */
 

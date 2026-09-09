@@ -516,10 +516,13 @@ function populateCategorieSelect() {
   select.innerHTML = CONFIG.CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
-// ---- Toast (annuler) ----
+// ---- Toast (annuler / infos) ----
+
+let toastQuantiteId = null;
 
 function showToast(message, onUndo, icone = 'check_circle') {
   clearTimeout(toastTimer);
+  toastQuantiteId = null; // par défaut ce toast n'est pas lié à l'affichage d'une quantité
   const toast = document.getElementById('toast');
   document.getElementById('toast-icon').textContent = icone;
   document.getElementById('toast-text').textContent = message;
@@ -531,7 +534,9 @@ function showToast(message, onUndo, icone = 'check_circle') {
 }
 
 function hideToast() {
+  clearTimeout(toastTimer);
   document.getElementById('toast').hidden = true;
+  toastQuantiteId = null;
 }
 
 // ---- Modal "ajouter à un modèle" ----
@@ -679,6 +684,8 @@ function setupEventListeners() {
     btn.addEventListener('click', () => activerOnglet(btn.dataset.tab));
   });
 
+  document.getElementById('toast-fermer').addEventListener('click', hideToast);
+
   document.getElementById('form-ajout').addEventListener('submit', (e) => {
     e.preventDefault();
     const nomInput = document.getElementById('input-nom');
@@ -739,7 +746,13 @@ function setupEventListeners() {
       const item = state.liste.find(it => it.id === id);
       if (item) ouvrirModalModele(item.nom, item.categorie);
     } else if (action === 'voir-quantite') {
-      showToast(`Quantité : ${row.dataset.quantite}`, null, 'scale');
+      const toast = document.getElementById('toast');
+      if (!toast.hidden && toastQuantiteId === id) {
+        hideToast();
+      } else {
+        showToast(`Quantité : ${row.dataset.quantite}`, null, 'scale');
+        toastQuantiteId = id;
+      }
     }
   });
 
