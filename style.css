@@ -110,6 +110,13 @@ body {
   margin: 1px 0 0;
   font-size: 24px; font-weight: 700; letter-spacing: -.4px; color: #fff;
 }
+.hero-title-btn {
+  border: none; background: none; padding: 0; margin: 0; cursor: pointer;
+  display: flex; align-items: center; gap: 2px; color: inherit; font: inherit;
+  max-width: 100%;
+}
+.hero-title-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-title-chevron { font-size: 22px; color: var(--navy-300); flex: none; }
 .hero-stats {
   margin: 3px 0 0;
   font-size: 13px; color: var(--navy-300);

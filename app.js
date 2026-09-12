@@ -3,9 +3,12 @@ const state = {
   modeles: {},
   archives: [],
   reference: [],
+  listes: [],
 };
 
 let modalCurrentItem = null;
+let modalListesMode = 'switch'; // 'switch' (changer de liste active) ou 'destination' (ajouter depuis un modèle)
+let modalListesModeleSource = null;
 let toastTimer = null;
 let isFlushing = false;
 let dernierRafraichissementArrierePlan = 0;
@@ -53,6 +56,7 @@ function loadCache() {
     state.modeles = JSON.parse(localStorage.getItem('lc_modeles') || '{}');
     state.archives = JSON.parse(localStorage.getItem('lc_archives') || '[]');
     state.reference = JSON.parse(localStorage.getItem('lc_reference') || '[]');
+    state.listes = JSON.parse(localStorage.getItem('lc_listes') || '[]');
   } catch (e) { /* cache corrompu, on repart de zéro */ }
 }
 
@@ -61,6 +65,66 @@ function saveCache() {
   localStorage.setItem('lc_modeles', JSON.stringify(state.modeles));
   localStorage.setItem('lc_archives', JSON.stringify(state.archives));
   localStorage.setItem('lc_reference', JSON.stringify(state.reference));
+  localStorage.setItem('lc_listes', JSON.stringify(state.listes));
+}
+
+// ---- Liste de courses active (Alimentaire, Bricolage, ...) ----
+
+function getListeActiveId() {
+  return localStorage.getItem('lc_liste_active_id') || '';
+}
+
+function setListeActiveId(id) {
+  localStorage.setItem('lc_liste_active_id', id);
+}
+
+function listeActive() {
+  return state.listes.find(l => l.id === getListeActiveId()) || state.listes[0];
+}
+
+// S'assure qu'un identifiant de liste active valide est toujours enregistré
+// (première ouverture, liste active supprimée ailleurs, etc.), en retombant sur
+// « Alimentaire » puis sur la première liste connue.
+function assurerListeActiveValide() {
+  if (state.listes.length === 0) return;
+  const idActuel = getListeActiveId();
+  if (idActuel && state.listes.some(l => l.id === idActuel)) return;
+  const parDefaut = state.listes.find(l => l.nom === 'Alimentaire') || state.listes[0];
+  setListeActiveId(parDefaut.id);
+}
+
+function categoriesListeActive() {
+  const liste = listeActive();
+  return (liste && liste.categories && liste.categories.length > 0) ? liste.categories : CONFIG.CATEGORIES;
+}
+
+function articlesListeActive() {
+  const idActive = getListeActiveId();
+  return state.liste.filter(it => it.listeId === idActive);
+}
+
+function archivesListeActive() {
+  const idActive = getListeActiveId();
+  return state.archives.filter(it => it.listeId === idActive);
+}
+
+function creerListe(nom) {
+  nom = nom.trim();
+  const existante = state.listes.find(l => l.nom.toLowerCase() === nom.toLowerCase());
+  if (existante) return existante;
+  const id = uuid();
+  const categories = CONFIG.CATEGORIES.slice();
+  const liste = { id, nom, categories };
+  state.listes.push(liste);
+  saveCache();
+  queueOrSend('creerListe', { id, nom, categories });
+  return liste;
+}
+
+function changerListeActive(id) {
+  setListeActiveId(id);
+  populateCategorieSelect();
+  renderAll();
 }
 
 function loadQueue() {
@@ -148,14 +212,17 @@ async function refreshFromServer() {
   if (!getAppsScriptUrl()) return;
   if (loadQueue().length > 0) return; // des actions locales n'ont pas encore été envoyées
   try {
-    const [liste, modeles, archives, reference] = await Promise.all([
-      apiGet('getListe'), apiGet('getModeles'), apiGet('getArchives'), apiGet('getReference'),
+    const [liste, modeles, archives, reference, listes] = await Promise.all([
+      apiGet('getListe'), apiGet('getModeles'), apiGet('getArchives'), apiGet('getReference'), apiGet('getListes'),
     ]);
     state.liste = liste;
     state.modeles = modeles;
     state.archives = archives;
     state.reference = reference;
+    state.listes = listes;
+    assurerListeActiveValide();
     saveCache();
+    populateCategorieSelect();
     renderAll();
   } catch (err) {
     // hors ligne, ou APPS_SCRIPT_URL pas encore configurée : on garde le cache local
@@ -196,11 +263,12 @@ function ajouterArticle(nom, categorie, quantite) {
   if (!nom) return;
   quantite = (quantite || '').trim();
   const id = uuid();
+  const listeId = getListeActiveId();
   const now = new Date().toISOString();
-  state.liste.push({ id, nom, categorie, quantite, statut: 'actif', dateAjout: now, dateMaj: now });
+  state.liste.push({ id, nom, categorie, quantite, statut: 'actif', dateAjout: now, dateMaj: now, listeId });
   saveCache();
   renderListe();
-  queueOrSend('ajouterArticle', { id, nom, categorie, quantite });
+  queueOrSend('ajouterArticle', { id, nom, categorie, quantite, listeId });
   showToast(`« ${nom} » ajouté`, () => {
     state.liste = state.liste.filter(it => it.id !== id);
     saveCache(); renderListe();
@@ -256,16 +324,17 @@ function creerModeleVide(nom) {
   renderModeles();
 }
 
-function ajouterAuModele(nom, categorie, modele) {
+function ajouterAuModele(nom, categorie, modele, quantite) {
   modele = modele.trim();
   if (!modele) return;
+  quantite = quantite || '';
   if (!state.modeles[modele]) state.modeles[modele] = [];
   const existe = state.modeles[modele].some(it => it.nom.toLowerCase() === nom.toLowerCase());
   if (!existe) {
-    state.modeles[modele].push({ id: uuid(), modele, nom, categorie });
+    state.modeles[modele].push({ id: uuid(), modele, nom, categorie, quantite });
     saveCache();
     renderModeles();
-    queueOrSend('ajouterAuModele', { modele, nom, categorie });
+    queueOrSend('ajouterAuModele', { modele, nom, categorie, quantite });
   }
   showToast(`Ajouté au modèle « ${modele} »`, null, 'bookmark_add');
 }
@@ -311,20 +380,26 @@ function ajouterDepuisModele(modele) {
     showToast('Aucun article sélectionné dans ce modèle');
     return;
   }
-  const nomsActifs = new Set(state.liste.map(it => it.nom.toLowerCase()));
+  ouvrirModalListes('destination', modele);
+}
+
+function ajouterDepuisModeleVersListe(modele, listeId) {
+  const items = (state.modeles[modele] || []).filter(item => estArticleSelectionne(modele, item.nom));
+  const nomsActifs = new Set(state.liste.filter(it => it.listeId === listeId).map(it => it.nom.toLowerCase()));
   let compte = 0;
   items.forEach(item => {
     if (nomsActifs.has(item.nom.toLowerCase())) return;
     const id = uuid();
     const now = new Date().toISOString();
-    state.liste.push({ id, nom: item.nom, categorie: item.categorie, statut: 'actif', dateAjout: now, dateMaj: now });
+    state.liste.push({ id, nom: item.nom, categorie: item.categorie, quantite: item.quantite || '', statut: 'actif', dateAjout: now, dateMaj: now, listeId });
     nomsActifs.add(item.nom.toLowerCase());
-    queueOrSend('ajouterArticle', { id, nom: item.nom, categorie: item.categorie });
+    queueOrSend('ajouterArticle', { id, nom: item.nom, categorie: item.categorie, quantite: item.quantite || '', listeId });
     compte++;
   });
   saveCache();
-  renderListe();
-  showToast(compte > 0 ? `${compte} article(s) ajouté(s) depuis « ${modele} »` : 'Tous les articles sélectionnés y sont déjà');
+  if (listeId === getListeActiveId()) renderListe();
+  const nomListe = (state.listes.find(l => l.id === listeId) || {}).nom || 'la liste';
+  showToast(compte > 0 ? `${compte} article(s) ajouté(s) à « ${nomListe} »` : 'Tous les articles sélectionnés y sont déjà');
 }
 
 // ---- Actions : Table de référence ----
@@ -354,10 +429,15 @@ function renderAll() {
 
 function pluriel(n, mot) { return `${n} ${mot}${n > 1 ? 's' : ''}`; }
 
-function renderStatsListe() {
-  const total = state.liste.length;
-  const achetes = state.liste.filter(it => it.statut === 'achete').length;
-  const nbRayons = new Set(state.liste.map(it => it.categorie || 'Autre')).size;
+function renderHeaderListe() {
+  const liste = listeActive();
+  document.getElementById('hero-liste-nom').textContent = liste ? liste.nom : 'Liste de courses';
+}
+
+function renderStatsListe(items) {
+  const total = items.length;
+  const achetes = items.filter(it => it.statut === 'achete').length;
+  const nbRayons = new Set(items.map(it => it.categorie || 'Autre')).size;
   document.getElementById('stats-liste').textContent = total === 0
     ? 'Aucun article pour le moment'
     : `${pluriel(total, 'article')} · ${achetes} acheté${achetes > 1 ? 's' : ''} · ${pluriel(nbRayons, 'rayon')}`;
@@ -370,8 +450,8 @@ function renderStatsModeles() {
     : `${nb} liste${nb > 1 ? 's' : ''} récurrente${nb > 1 ? 's' : ''}`;
 }
 
-function renderStatsArchives() {
-  const nb = state.archives.length;
+function renderStatsArchives(items) {
+  const nb = items.length;
   document.getElementById('stats-archives').textContent = nb === 0
     ? 'Aucun article archivé'
     : `${nb} article${nb > 1 ? 's' : ''} archivé${nb > 1 ? 's' : ''}`;
@@ -387,17 +467,19 @@ function groupParCategorie(items) {
 }
 
 function renderListe() {
-  renderStatsListe();
+  renderHeaderListe();
+  const items = articlesListeActive();
+  renderStatsListe(items);
   const conteneur = document.getElementById('liste-contenu');
   const vide = document.getElementById('liste-vide');
-  if (state.liste.length === 0) {
+  if (items.length === 0) {
     conteneur.innerHTML = '';
     vide.hidden = false;
     return;
   }
   vide.hidden = true;
-  const groupes = groupParCategorie(state.liste);
-  const ordre = CONFIG.CATEGORIES.filter(c => groupes[c]);
+  const groupes = groupParCategorie(items);
+  const ordre = categoriesListeActive().filter(c => groupes[c]);
   Object.keys(groupes).forEach(c => { if (!ordre.includes(c)) ordre.push(c); });
 
   conteneur.innerHTML = ordre.map(cat => {
@@ -467,10 +549,14 @@ function renderModeles() {
         </div>
         ${items.length === 0 ? '<p class="empty-state-inline dans-carte">Aucun article dans ce modèle pour l\'instant.</p>' : items.map(item => {
           const selectionne = estArticleSelectionne(modele, item.nom);
+          const badgeQuantite = item.quantite
+            ? `<button type="button" class="item-qte-badge" data-action="voir-quantite-modele" title="Voir la quantité"><span class="ms">scale</span></button>`
+            : '';
           return `
-          <div class="modele-item ${selectionne ? 'selectionne' : ''}" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}">
+          <div class="modele-item ${selectionne ? 'selectionne' : ''}" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}" data-quantite="${escapeHtml(item.quantite || '')}">
             <button type="button" class="modele-checkbox-btn ${selectionne ? 'checked' : ''}" data-action="toggle-selection" title="Sélectionner">${selectionne ? '<span class="ms msf">check</span>' : ''}</button>
             <span class="modele-item-nom">${escapeHtml(item.nom)}</span>
+            ${badgeQuantite}
             <button class="icon-btn icon-btn-danger" data-action="supprimer-du-modele" title="Retirer du modèle"><span class="ms">close</span></button>
           </div>`;
         }).join('')}
@@ -479,16 +565,17 @@ function renderModeles() {
 }
 
 function renderArchives() {
-  renderStatsArchives();
+  const archives = archivesListeActive();
+  renderStatsArchives(archives);
   const conteneur = document.getElementById('archives-contenu');
   const vide = document.getElementById('archives-vide');
-  if (state.archives.length === 0) {
+  if (archives.length === 0) {
     conteneur.innerHTML = '';
     vide.hidden = false;
     return;
   }
   vide.hidden = true;
-  const items = state.archives.slice().sort((a, b) => (b.dateArchive || '').localeCompare(a.dateArchive || ''));
+  const items = archives.slice().sort((a, b) => (b.dateArchive || '').localeCompare(a.dateArchive || ''));
   const groupes = [];
   items.forEach(item => {
     const libelle = libelleJour(item.dateArchive);
@@ -513,7 +600,7 @@ function renderArchives() {
 
 function populateCategorieSelect() {
   const select = document.getElementById('input-categorie');
-  select.innerHTML = CONFIG.CATEGORIES.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  select.innerHTML = categoriesListeActive().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
 // ---- Toast (annuler / infos) ----
@@ -541,8 +628,8 @@ function hideToast() {
 
 // ---- Modal "ajouter à un modèle" ----
 
-function ouvrirModalModele(nom, categorie) {
-  modalCurrentItem = { nom, categorie };
+function ouvrirModalModele(nom, categorie, quantite) {
+  modalCurrentItem = { nom, categorie, quantite };
   document.getElementById('modal-soustitre').textContent = `« ${nom} » sera ajouté au modèle choisi.`;
   const conteneur = document.getElementById('modal-modele-liste');
   const noms = Object.keys(state.modeles).sort((a, b) => a.localeCompare(b));
@@ -565,6 +652,39 @@ function fermerModalModele() {
   document.getElementById('modal-modele').hidden = true;
   modalCurrentItem = null;
   document.getElementById('modal-input-nouveau-modele').value = '';
+}
+
+// ---- Modal "changer de liste" / "choisir la liste de destination" ----
+
+function ouvrirModalListes(mode, modele) {
+  modalListesMode = mode;
+  modalListesModeleSource = modele || null;
+  const idActive = getListeActiveId();
+  document.getElementById('modal-listes-titre').textContent = mode === 'destination' ? 'Ajouter à quelle liste ?' : 'Changer de liste';
+  document.getElementById('modal-listes-soustitre').textContent = mode === 'destination'
+    ? `Les articles sélectionnés de « ${modele} » seront ajoutés à la liste choisie.`
+    : 'Choisissez la liste de courses à afficher.';
+  const conteneur = document.getElementById('modal-listes-liste');
+  const listes = state.listes.slice().sort((a, b) => a.nom.localeCompare(b.nom));
+  conteneur.innerHTML = listes.map(l => {
+    const estActive = mode === 'switch' && l.id === idActive;
+    return `
+      <button type="button" class="modele-choix-btn" data-liste-id="${escapeHtml(l.id)}">
+        <span class="ms icon-bookmarks">shopping_cart</span>
+        <span class="modele-choix-infos">
+          <span class="modele-choix-nom">${escapeHtml(l.nom)}</span>
+          ${estActive ? '<span class="modele-choix-compte">Liste actuelle</span>' : ''}
+        </span>
+        <span class="ms icon-chevron">chevron_right</span>
+      </button>`;
+  }).join('') || '<p class="modal-vide">Aucune liste existante, créez-en une ci-dessous.</p>';
+  document.getElementById('modal-listes').hidden = false;
+}
+
+function fermerModalListes() {
+  document.getElementById('modal-listes').hidden = true;
+  document.getElementById('modal-input-nouvelle-liste').value = '';
+  modalListesModeleSource = null;
 }
 
 // ---- Champ quantité (repliable) ----
@@ -622,7 +742,7 @@ function proposerAjoutReference(nom, categorie) {
   document.getElementById('modal-reference-soustitre').textContent =
     `« ${nom} » n'est pas encore dans votre table de référence. L'ajouter permet de le retrouver plus vite la prochaine fois, avec sa catégorie.`;
   const select = document.getElementById('modal-reference-categorie-select');
-  select.innerHTML = CONFIG.CATEGORIES.map(c => `<option value="${escapeHtml(c)}" ${c === categorie ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  select.innerHTML = categoriesListeActive().map(c => `<option value="${escapeHtml(c)}" ${c === categorie ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
   document.getElementById('modal-reference').hidden = false;
 }
 
@@ -744,7 +864,7 @@ function setupEventListeners() {
     else if (action === 'archiver') archiver(id);
     else if (action === 'modele') {
       const item = state.liste.find(it => it.id === id);
-      if (item) ouvrirModalModele(item.nom, item.categorie);
+      if (item) ouvrirModalModele(item.nom, item.categorie, item.quantite);
     } else if (action === 'voir-quantite') {
       const toast = document.getElementById('toast');
       if (!toast.hidden && toastQuantiteId === id) {
@@ -779,6 +899,15 @@ function setupEventListeners() {
       const dejaSelectionne = itemEl.classList.contains('selectionne');
       definirSelectionArticle(modele, itemEl.dataset.nom, !dejaSelectionne);
       renderModeles();
+    } else if (action === 'voir-quantite-modele') {
+      const itemEl = e.target.closest('.modele-item');
+      const toast = document.getElementById('toast');
+      if (!toast.hidden && toastQuantiteId === itemEl.dataset.id) {
+        hideToast();
+      } else {
+        showToast(`Quantité : ${itemEl.dataset.quantite}`, null, 'scale');
+        toastQuantiteId = itemEl.dataset.id;
+      }
     }
   });
 
@@ -791,7 +920,7 @@ function setupEventListeners() {
   document.getElementById('modal-modele-liste').addEventListener('click', (e) => {
     const btn = e.target.closest('.modele-choix-btn');
     if (!btn || !modalCurrentItem) return;
-    ajouterAuModele(modalCurrentItem.nom, modalCurrentItem.categorie, btn.dataset.modele);
+    ajouterAuModele(modalCurrentItem.nom, modalCurrentItem.categorie, btn.dataset.modele, modalCurrentItem.quantite);
     fermerModalModele();
   });
 
@@ -800,11 +929,35 @@ function setupEventListeners() {
     if (!modalCurrentItem) return;
     const input = document.getElementById('modal-input-nouveau-modele');
     if (!input.value.trim()) return;
-    ajouterAuModele(modalCurrentItem.nom, modalCurrentItem.categorie, input.value);
+    ajouterAuModele(modalCurrentItem.nom, modalCurrentItem.categorie, input.value, modalCurrentItem.quantite);
     fermerModalModele();
   });
 
   document.getElementById('modal-fermer').addEventListener('click', fermerModalModele);
+
+  document.getElementById('btn-liste-active').addEventListener('click', () => ouvrirModalListes('switch'));
+
+  document.getElementById('modal-listes-liste').addEventListener('click', (e) => {
+    const btn = e.target.closest('.modele-choix-btn');
+    if (!btn) return;
+    const listeId = btn.dataset.listeId;
+    if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, listeId);
+    else changerListeActive(listeId);
+    fermerModalListes();
+  });
+
+  document.getElementById('form-modal-nouvelle-liste').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('modal-input-nouvelle-liste');
+    const nom = input.value.trim();
+    if (!nom) return;
+    const liste = creerListe(nom);
+    if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, liste.id);
+    else changerListeActive(liste.id);
+    fermerModalListes();
+  });
+
+  document.getElementById('modal-listes-fermer').addEventListener('click', fermerModalListes);
 
   document.querySelectorAll('.btn-settings').forEach(btn => {
     btn.addEventListener('click', () => ouvrirEcranConfig({ obligatoire: false }));
@@ -835,6 +988,7 @@ function setupEventListeners() {
 
 async function init() {
   loadCache();
+  assurerListeActiveValide();
   populateCategorieSelect();
   renderAll();
   setupEventListeners();

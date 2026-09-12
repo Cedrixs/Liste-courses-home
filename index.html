@@ -28,7 +28,12 @@
       <img src="icons/icon-192.png" alt="" class="hero-logo">
       <div class="hero-titles">
         <p class="hero-eyebrow">Rue Felix</p>
-        <h1 class="hero-title">Liste de courses</h1>
+        <h1 class="hero-title">
+          <button type="button" id="btn-liste-active" class="hero-title-btn">
+            <span id="hero-liste-nom">Liste de courses</span>
+            <span class="ms hero-title-chevron">expand_more</span>
+          </button>
+        </h1>
         <p class="hero-stats" id="stats-liste"></p>
       </div>
       <button type="button" class="btn-settings" title="Réglages de connexion"><span class="ms">settings</span></button>
@@ -136,6 +141,22 @@
     <div id="modal-modele-liste" class="modal-modele-liste"></div>
     <form id="form-modal-nouveau-modele" class="modal-nouveau-modele" autocomplete="off">
       <input id="modal-input-nouveau-modele" type="text" placeholder="Ou nouveau modèle…">
+      <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">add</span>Créer</button>
+    </form>
+  </div>
+</div>
+
+<div id="modal-listes" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3 id="modal-listes-titre">Changer de liste</h3>
+      <button type="button" id="modal-listes-fermer" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <p class="modal-soustitre" id="modal-listes-soustitre"></p>
+    <div id="modal-listes-liste" class="modal-modele-liste"></div>
+    <form id="form-modal-nouvelle-liste" class="modal-nouveau-modele" autocomplete="off">
+      <input id="modal-input-nouvelle-liste" type="text" placeholder="Ou nouvelle liste…">
       <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">add</span>Créer</button>
     </form>
   </div>
