@@ -18,35 +18,14 @@ const HEADERS = {
   [SHEET_LISTES]: ['id', 'nom', 'categories', 'dateCreation'],
 };
 
-// Catégories par défaut des deux listes de courses connues au moment de
-// l'introduction du multi-listes (voir migrateVersListesMultiples_). Une liste
-// créée plus tard depuis l'appli reçoit ses propres catégories, choisies par
-// qui la crée.
+// Catégories par défaut de la liste "Alimentaire" créée lors de la migration
+// vers le multi-listes (voir migrerVersListesMultiples_), pour rattacher les
+// données déjà présentes avant cette fonctionnalité. Toute autre liste (créée
+// depuis l'appli, ou via l'API par un tiers) reçoit ses propres catégories,
+// choisies au moment de sa création : rien d'autre n'est présupposé ici.
 const CATEGORIES_ALIMENTAIRE_DEFAUT = [
   'Fruits & Légumes', 'Laitage & Fromage', 'Viande & Poisson', 'Sec', 'Traiteur',
   'Surgelés', 'Boissons', 'Hygiène', 'Entretien', 'Autre',
-];
-const CATEGORIES_BRICOLAGE_DEFAUT = ['Outillage', 'Protection', 'Produits', 'Optionnel', 'Autre'];
-
-const MODELE_BRICOLAGE_NOM = 'Portail - bricolage';
-const MODELE_BRICOLAGE_SEED = [
-  ['Jeu de brosses métalliques sur tige pour perceuse (kit de 3)', 'Outillage', '12-15€ (un seul suffit, on alterne)'],
-  ['Papier de verre grains 80 + 120, 2 feuilles de chaque', 'Outillage', '6€'],
-  ['Spatule/grattoir métallique x2', 'Outillage', '6€'],
-  ['Pinceau plat 50mm x2', 'Outillage', '12€'],
-  ['Pinceau rond ou "à rechampir" 20mm pour les barreaux x2', 'Outillage', '10€'],
-  ['Petit rouleau laqueur mousse + manche + bac x2', 'Outillage', '24€'],
-  ['Brosse dure (chiendent) pour le muret', 'Outillage', '5€ (un seul suffit)'],
-  ['Ruban de masquage qualité (type Tesa précision)', 'Outillage', '6€ (un seul suffit)'],
-  ['Bâche plastique 4×5m', 'Outillage', '5€ (une seule suffit)'],
-  ['Lunettes de protection x2', 'Protection', '10€'],
-  ['Masque FFP2 (boîte de 5)', 'Protection', '6€ (une boîte suffit pour deux)'],
-  ['Gants chantier x2', 'Protection', '10€'],
-  ["Peinture fer à l'eau \"direct sur rouille\" satinée, 5L gris perle (2 faces × 2 couches)", 'Produits', '~50€ (un seul stock, partagé)'],
-  ['White spirit 1L', 'Produits', '4€ (un seul suffit)'],
-  ["Anti-mousse prêt à l'emploi 2L", 'Produits', '12€ (un seul suffit)'],
-  ['Chiffons coton (vieux t-shirts découpés)', 'Produits', '0€'],
-  ['Convertisseur de rouille (si piqûres profondes)', 'Optionnel', '~15€'],
 ];
 
 // Articles courants pré-remplis dans la table de référence au premier démarrage,
@@ -159,10 +138,12 @@ function ensureSetup() {
 
 // Introduit les listes de courses multiples (ex: Alimentaire, Bricolage) sur un
 // déploiement existant : ajoute la colonne listeId (Liste/Archives) et quantite
-// (Recurrents), rattache les articles déjà présents à une liste "Alimentaire"
-// créée pour l'occasion, puis pré-remplit une liste "Bricolage" avec le modèle
-// "Portail - bricolage". Gardé séparé de SETUP_FLAG pour tourner une seule fois
-// même sur une feuille déjà en place depuis longtemps.
+// (Recurrents), puis rattache les articles déjà présents à une liste
+// "Alimentaire" créée pour l'occasion. Ne crée aucune autre liste ni aucun
+// modèle : toute nouvelle liste ou modèle se crée depuis l'appli, ou via
+// l'API (actions creerListe / ajouterAuModele), jamais codé en dur ici.
+// Gardé séparé de SETUP_FLAG pour tourner une seule fois même sur une feuille
+// déjà en place depuis longtemps.
 const MIGRATION_LISTES_MULTIPLES_FLAG = 'migrationListesMultiples_v1';
 
 function migrerVersListesMultiples_() {
@@ -177,9 +158,6 @@ function migrerVersListesMultiples_() {
   const alimentaireId = trouverOuCreerListe_('Alimentaire', CATEGORIES_ALIMENTAIRE_DEFAUT);
   rattacherLignesSansListeId_(getSheet_(SHEET_LISTE), alimentaireId);
   rattacherLignesSansListeId_(getSheet_(SHEET_ARCHIVES), alimentaireId);
-
-  trouverOuCreerListe_('Bricolage', CATEGORIES_BRICOLAGE_DEFAUT);
-  seedModeleBricolageSiAbsent_();
 
   proprietes.setProperty(MIGRATION_LISTES_MULTIPLES_FLAG, 'true');
 }
@@ -204,16 +182,6 @@ function rattacherLignesSansListeId_(sheet, listeIdParDefaut) {
     if (values[i][0] === '' || values[i][col - 1]) continue;
     sheet.getRange(i + 1, col).setValue(listeIdParDefaut);
   }
-}
-
-function seedModeleBricolageSiAbsent_() {
-  const sheet = getSheet_(SHEET_RECURRENTS);
-  const items = rowsToObjects_(sheet);
-  const dejaPresent = items.some(it => it.modele === MODELE_BRICOLAGE_NOM);
-  if (dejaPresent) return;
-  const lignes = MODELE_BRICOLAGE_SEED.map(([nom, categorie, quantite]) =>
-    [newId_(), MODELE_BRICOLAGE_NOM, nom, categorie, quantite]);
-  lignes.forEach(ligne => sheet.appendRow(ligne));
 }
 
 // Ajoute une colonne d'en-tête manquante sur une feuille déjà déployée avant cette
