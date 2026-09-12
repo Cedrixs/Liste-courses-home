@@ -8,13 +8,25 @@ const SHEET_LISTE = 'Liste';
 const SHEET_ARCHIVES = 'Archives';
 const SHEET_RECURRENTS = 'Recurrents';
 const SHEET_REFERENCE = 'Reference';
+const SHEET_LISTES = 'Listes';
 
 const HEADERS = {
-  [SHEET_LISTE]: ['id', 'nom', 'categorie', 'statut', 'dateAjout', 'dateMaj', 'quantite'],
-  [SHEET_ARCHIVES]: ['id', 'nom', 'categorie', 'dateAjout', 'dateArchive', 'quantite'],
-  [SHEET_RECURRENTS]: ['id', 'modele', 'nom', 'categorie'],
+  [SHEET_LISTE]: ['id', 'nom', 'categorie', 'statut', 'dateAjout', 'dateMaj', 'quantite', 'listeId'],
+  [SHEET_ARCHIVES]: ['id', 'nom', 'categorie', 'dateAjout', 'dateArchive', 'quantite', 'listeId'],
+  [SHEET_RECURRENTS]: ['id', 'modele', 'nom', 'categorie', 'quantite'],
   [SHEET_REFERENCE]: ['id', 'nom', 'categorie'],
+  [SHEET_LISTES]: ['id', 'nom', 'categories', 'dateCreation'],
 };
+
+// Catégories par défaut de la liste "Alimentaire" créée lors de la migration
+// vers le multi-listes (voir migrerVersListesMultiples_), pour rattacher les
+// données déjà présentes avant cette fonctionnalité. Toute autre liste (créée
+// depuis l'appli, ou via l'API par un tiers) reçoit ses propres catégories,
+// choisies au moment de sa création : rien d'autre n'est présupposé ici.
+const CATEGORIES_ALIMENTAIRE_DEFAUT = [
+  'Fruits & Légumes', 'Laitage & Fromage', 'Viande & Poisson', 'Sec', 'Traiteur',
+  'Surgelés', 'Boissons', 'Hygiène', 'Entretien', 'Autre',
+];
 
 // Articles courants pré-remplis dans la table de référence au premier démarrage,
 // répartis par rayon (la liste des rayons se personnalise dans config.js).
@@ -108,19 +120,68 @@ const SETUP_FLAG = 'setupComplete_v2';
 
 function ensureSetup() {
   const proprietes = PropertiesService.getScriptProperties();
-  if (proprietes.getProperty(SETUP_FLAG) === 'true') return;
-
-  Object.keys(HEADERS).forEach(getSheet_);
-  migrerEntete_(SHEET_LISTE, 'quantite');
-  migrerEntete_(SHEET_ARCHIVES, 'quantite');
-  seedReferenceSiVide_();
-  const defaultSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Feuille 1') ||
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sheet1');
-  if (defaultSheet && defaultSheet.getLastRow() === 0 && defaultSheet.getLastColumn() <= 1) {
-    SpreadsheetApp.getActiveSpreadsheet().deleteSheet(defaultSheet);
+  if (proprietes.getProperty(SETUP_FLAG) !== 'true') {
+    Object.keys(HEADERS).forEach(getSheet_);
+    migrerEntete_(SHEET_LISTE, 'quantite');
+    migrerEntete_(SHEET_ARCHIVES, 'quantite');
+    seedReferenceSiVide_();
+    const defaultSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Feuille 1') ||
+      SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sheet1');
+    if (defaultSheet && defaultSheet.getLastRow() === 0 && defaultSheet.getLastColumn() <= 1) {
+      SpreadsheetApp.getActiveSpreadsheet().deleteSheet(defaultSheet);
+    }
+    proprietes.setProperty(SETUP_FLAG, 'true');
   }
 
-  proprietes.setProperty(SETUP_FLAG, 'true');
+  migrerVersListesMultiples_();
+}
+
+// Introduit les listes de courses multiples (ex: Alimentaire, Bricolage) sur un
+// déploiement existant : ajoute la colonne listeId (Liste/Archives) et quantite
+// (Recurrents), puis rattache les articles déjà présents à une liste
+// "Alimentaire" créée pour l'occasion. Ne crée aucune autre liste ni aucun
+// modèle : toute nouvelle liste ou modèle se crée depuis l'appli, ou via
+// l'API (actions creerListe / ajouterAuModele), jamais codé en dur ici.
+// Gardé séparé de SETUP_FLAG pour tourner une seule fois même sur une feuille
+// déjà en place depuis longtemps.
+const MIGRATION_LISTES_MULTIPLES_FLAG = 'migrationListesMultiples_v1';
+
+function migrerVersListesMultiples_() {
+  const proprietes = PropertiesService.getScriptProperties();
+  if (proprietes.getProperty(MIGRATION_LISTES_MULTIPLES_FLAG) === 'true') return;
+
+  getSheet_(SHEET_LISTES);
+  migrerEntete_(SHEET_LISTE, 'listeId');
+  migrerEntete_(SHEET_ARCHIVES, 'listeId');
+  migrerEntete_(SHEET_RECURRENTS, 'quantite');
+
+  const alimentaireId = trouverOuCreerListe_('Alimentaire', CATEGORIES_ALIMENTAIRE_DEFAUT);
+  rattacherLignesSansListeId_(getSheet_(SHEET_LISTE), alimentaireId);
+  rattacherLignesSansListeId_(getSheet_(SHEET_ARCHIVES), alimentaireId);
+
+  proprietes.setProperty(MIGRATION_LISTES_MULTIPLES_FLAG, 'true');
+}
+
+function trouverOuCreerListe_(nom, categories) {
+  const sheet = getSheet_(SHEET_LISTES);
+  const listes = rowsToObjects_(sheet);
+  const existante = listes.find(l => l.nom === nom);
+  if (existante) return existante.id;
+  const id = newId_();
+  sheet.appendRow([id, nom, JSON.stringify(categories), nowIso_()]);
+  return id;
+}
+
+function rattacherLignesSansListeId_(sheet, listeIdParDefaut) {
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return;
+  const headers = values[0];
+  const col = headers.indexOf('listeId') + 1;
+  if (col === 0) return;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] === '' || values[i][col - 1]) continue;
+    sheet.getRange(i + 1, col).setValue(listeIdParDefaut);
+  }
 }
 
 // Ajoute une colonne d'en-tête manquante sur une feuille déjà déployée avant cette
@@ -204,6 +265,9 @@ function doGet(e) {
       case 'getModeles':
         result = actionGetModeles();
         break;
+      case 'getListes':
+        result = actionGetListes();
+        break;
       case 'getReference':
         result = actionGetReference();
         break;
@@ -249,6 +313,9 @@ function doPost(e) {
       case 'ajouterAuModele':
         result = withLock_(() => actionAjouterAuModele(payload));
         break;
+      case 'creerListe':
+        result = withLock_(() => actionCreerListe(payload));
+        break;
       case 'ajouterReference':
         result = withLock_(() => actionAjouterReference(payload));
         break;
@@ -278,7 +345,7 @@ function actionAjouterArticle(payload) {
   const id = payload.id || newId_();
   const existing = findRowIndexById_(sheet, id);
   if (existing === -1) {
-    sheet.appendRow([id, payload.nom, payload.categorie || 'Autre', 'actif', nowIso_(), nowIso_(), payload.quantite || '']);
+    sheet.appendRow([id, payload.nom, payload.categorie || 'Autre', 'actif', nowIso_(), nowIso_(), payload.quantite || '', payload.listeId || '']);
   }
   return { id };
 }
@@ -303,7 +370,7 @@ function actionArchiver(payload) {
   const values = liste.getRange(row, 1, 1, HEADERS[SHEET_LISTE].length).getValues()[0];
   const obj = {};
   HEADERS[SHEET_LISTE].forEach((h, i) => { obj[h] = values[i]; });
-  archives.appendRow([obj.id, obj.nom, obj.categorie, obj.dateAjout, nowIso_(), obj.quantite || '']);
+  archives.appendRow([obj.id, obj.nom, obj.categorie, obj.dateAjout, nowIso_(), obj.quantite || '', obj.listeId || '']);
   liste.deleteRow(row);
   return { id: payload.id };
 }
@@ -316,7 +383,7 @@ function actionRestaurerDepuisArchive(payload) {
   const values = archives.getRange(row, 1, 1, HEADERS[SHEET_ARCHIVES].length).getValues()[0];
   const obj = {};
   HEADERS[SHEET_ARCHIVES].forEach((h, i) => { obj[h] = values[i]; });
-  liste.appendRow([obj.id, obj.nom, obj.categorie, 'actif', obj.dateAjout, nowIso_(), obj.quantite || '']);
+  liste.appendRow([obj.id, obj.nom, obj.categorie, 'actif', obj.dateAjout, nowIso_(), obj.quantite || '', obj.listeId || '']);
   archives.deleteRow(row);
   return { id: payload.id };
 }
@@ -354,7 +421,7 @@ function actionAjouterAuModele(payload) {
     String(it.nom).toLowerCase() === String(payload.nom).toLowerCase());
   if (doublon) return { id: doublon.id };
   const id = newId_();
-  sheet.appendRow([id, payload.modele, payload.nom, payload.categorie || 'Autre']);
+  sheet.appendRow([id, payload.modele, payload.nom, payload.categorie || 'Autre', payload.quantite || '']);
   return { id };
 }
 
@@ -364,6 +431,35 @@ function actionSupprimerDuModele(payload) {
   if (row === -1) return { id: payload.id };
   sheet.deleteRow(row);
   return { id: payload.id };
+}
+
+// ---- Listes de courses (Alimentaire, Bricolage, ...) ----
+
+function actionGetListes() {
+  return rowsToObjects_(getSheet_(SHEET_LISTES)).map(l => ({
+    id: l.id,
+    nom: l.nom,
+    categories: parseCategories_(l.categories),
+  }));
+}
+
+function parseCategories_(json) {
+  try {
+    const categories = JSON.parse(json);
+    return Array.isArray(categories) ? categories : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function actionCreerListe(payload) {
+  const sheet = getSheet_(SHEET_LISTES);
+  const listes = rowsToObjects_(sheet);
+  const doublon = listes.find(l => String(l.nom).toLowerCase() === String(payload.nom).toLowerCase());
+  if (doublon) return { id: doublon.id };
+  const id = payload.id || newId_();
+  sheet.appendRow([id, payload.nom, JSON.stringify(payload.categories || []), nowIso_()]);
+  return { id };
 }
 
 // ---- Table de référence des articles ----
@@ -385,13 +481,15 @@ function actionAjouterReference(payload) {
 function actionAjouterDepuisModele(payload) {
   const recurrents = rowsToObjects_(getSheet_(SHEET_RECURRENTS)).filter(it => it.modele === payload.modele);
   const liste = getSheet_(SHEET_LISTE);
-  const actifs = rowsToObjects_(liste).map(it => String(it.nom).toLowerCase());
+  const actifs = rowsToObjects_(liste)
+    .filter(it => it.listeId === payload.listeId)
+    .map(it => String(it.nom).toLowerCase());
   const ajoutes = [];
   recurrents.forEach(item => {
     if (actifs.indexOf(String(item.nom).toLowerCase()) !== -1) return;
     const id = newId_();
-    liste.appendRow([id, item.nom, item.categorie, 'actif', nowIso_(), nowIso_()]);
-    ajoutes.push({ id, nom: item.nom, categorie: item.categorie });
+    liste.appendRow([id, item.nom, item.categorie, 'actif', nowIso_(), nowIso_(), item.quantite || '', payload.listeId || '']);
+    ajoutes.push({ id, nom: item.nom, categorie: item.categorie, quantite: item.quantite || '' });
   });
   return { ajoutes };
 }
