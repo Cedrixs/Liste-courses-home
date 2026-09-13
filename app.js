@@ -208,27 +208,35 @@ async function flushQueue() {
   }
 }
 
+// Chaque ressource est récupérée indépendamment : si l'une échoue (backend pas
+// encore à jour, action inconnue, etc.), les autres se mettent quand même à
+// jour au lieu de laisser tout l'écran bloqué sur l'ancien cache sans indice
+// sur ce qui cloche (voir la console en cas de souci).
 async function refreshFromServer() {
   if (!getAppsScriptUrl()) return;
   if (loadQueue().length > 0) return; // des actions locales n'ont pas encore été envoyées
-  try {
-    const [liste, modeles, archives, reference, listes] = await Promise.all([
-      apiGet('getListe'), apiGet('getModeles'), apiGet('getArchives'), apiGet('getReference'), apiGet('getListes'),
-    ]);
-    state.liste = liste;
-    state.modeles = modeles;
-    state.archives = archives;
-    state.reference = reference;
-    state.listes = listes;
-    assurerListeActiveValide();
-    saveCache();
-    populateCategorieSelect();
-    renderAll();
-  } catch (err) {
-    // hors ligne, ou APPS_SCRIPT_URL pas encore configurée : on garde le cache local
-  } finally {
-    updateOfflineBanner();
-  }
+  const cibles = {
+    liste: 'getListe', modeles: 'getModeles', archives: 'getArchives',
+    reference: 'getReference', listes: 'getListes',
+  };
+  const resultats = await Promise.allSettled(
+    Object.values(cibles).map(action => apiGet(action))
+  );
+  Object.keys(cibles).forEach((cle, i) => {
+    const resultat = resultats[i];
+    if (resultat.status === 'fulfilled') {
+      state[cle] = resultat.value;
+    } else if (!(resultat.reason instanceof TypeError)) {
+      // TypeError = pas de réseau, cas normal hors ligne ; toute autre erreur
+      // (action inconnue, erreur du script) vaut la peine d'être visible.
+      console.error(`Échec de ${cibles[cle]} :`, resultat.reason);
+    }
+  });
+  assurerListeActiveValide();
+  saveCache();
+  populateCategorieSelect();
+  renderAll();
+  updateOfflineBanner();
 }
 
 // Recharge liste/modèles/archives/référence en tâche de fond (sans bloquer l'UI),
@@ -431,7 +439,7 @@ function pluriel(n, mot) { return `${n} ${mot}${n > 1 ? 's' : ''}`; }
 
 function renderHeaderListe() {
   const liste = listeActive();
-  document.getElementById('hero-liste-nom').textContent = liste ? liste.nom : 'Liste de courses';
+  document.getElementById('hero-liste-nom').textContent = liste ? liste.nom : 'Choisir une liste';
 }
 
 function renderStatsListe(items) {
