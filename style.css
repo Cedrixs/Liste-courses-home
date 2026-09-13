@@ -110,13 +110,19 @@ body {
   margin: 1px 0 0;
   font-size: 24px; font-weight: 700; letter-spacing: -.4px; color: #fff;
 }
-.hero-title-btn {
-  border: none; background: none; padding: 0; margin: 0; cursor: pointer;
-  display: flex; align-items: center; gap: 2px; color: inherit; font: inherit;
+.hero-liste-pill {
+  margin: 5px 0 0;
   max-width: 100%;
+  height: 22px;
+  padding: 0 8px 0 10px;
+  border: none; border-radius: 11px;
+  background: var(--navy-100); color: var(--navy-700);
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 1px;
+  cursor: pointer; overflow: hidden;
 }
-.hero-title-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hero-title-chevron { font-size: 22px; color: var(--navy-300); flex: none; }
+.hero-liste-pill span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-liste-pill-chevron { font-size: 16px; flex: none; }
 .hero-stats {
   margin: 3px 0 0;
   font-size: 13px; color: var(--navy-300);
