@@ -35,6 +35,9 @@ GitHub Pages exige que le dépôt soit **public**. L'URL de votre Apps Script (�
 3. Source : **Deploy from a branch**, branche = celle où se trouve le code, dossier = `/ (root)`.
 4. Enregistrez. GitHub vous donne une URL du type `https://votre-compte.github.io/Liste-courses-home/`.
 
+> **Branche déployée sur GitHub Pages : `claude/shared-shopping-list-app-3xtucd`.**
+> C'est la seule branche que GitHub Pages publie réellement. Toute modification doit être fusionnée dans cette branche pour apparaître dans l'appli installée sur les téléphones (fermer/rouvrir l'appli ne suffit pas si le code est resté sur une autre branche). Vérifiable et modifiable dans Settings > Pages du dépôt.
+
 C'est cette URL que vous et les autres membres du foyer allez utiliser. Vous pouvez personnaliser la liste `CATEGORIES` dans [`config.js`](config.js) si vous voulez d'autres rayons (ce fichier ne contient rien de sensible).
 
 ## Étape 3 : installer l'appli et se connecter
