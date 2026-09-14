@@ -56,6 +56,9 @@
   </header>
 
   <div class="view-scroll">
+    <div class="liste-toolbar">
+      <button type="button" id="btn-archiver-tout" class="btn-archiver-tout" hidden><span class="ms">inventory_2</span>Archiver toute la liste</button>
+    </div>
     <div id="liste-contenu" class="liste-contenu"></div>
     <div id="liste-vide" class="empty-state" hidden>
       <div class="empty-icon"><span class="ms">checklist</span></div>
@@ -176,6 +179,21 @@
     <div class="modal-reference-actions">
       <button type="button" id="modal-reference-non" class="btn-pill btn-pill-outline">Non merci</button>
       <button type="button" id="modal-reference-oui" class="btn-pill"><span class="ms">library_add</span>Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-confirmer-archiver-tout" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3>Archiver toute la liste ?</h3>
+      <button type="button" id="modal-confirmer-archiver-tout-fermer" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <p class="modal-soustitre" id="modal-confirmer-archiver-tout-texte"></p>
+    <div class="modal-reference-actions">
+      <button type="button" id="modal-confirmer-archiver-tout-annuler" class="btn-pill btn-pill-outline">Annuler</button>
+      <button type="button" id="modal-confirmer-archiver-tout-confirmer" class="btn-pill btn-pill-danger"><span class="ms">inventory_2</span>Archiver tout</button>
     </div>
   </div>
 </div>

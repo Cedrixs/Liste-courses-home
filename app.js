@@ -288,6 +288,7 @@ function toggleAchete(id) {
   const item = state.liste.find(it => it.id === id);
   if (!item) return;
   item.statut = item.statut === 'achete' ? 'actif' : 'achete';
+  item.dateMaj = new Date().toISOString();
   saveCache();
   renderListe();
   queueOrSend('toggleAchete', { id, statut: item.statut });
@@ -307,6 +308,25 @@ function archiver(id) {
     state.liste.push(item);
     saveCache(); renderListe(); renderArchives();
     queueOrSend('restaurerDepuisArchive', { id: item.id });
+  }, 'inventory_2');
+}
+
+// Archive tous les articles de la liste active (cochés ou non), en une fois.
+function archiverToutListeActive(items) {
+  if (items.length === 0) return;
+  const ids = new Set(items.map(it => it.id));
+  const now = new Date().toISOString();
+  state.liste = state.liste.filter(it => !ids.has(it.id));
+  state.archives.unshift(...items.map(it => ({ ...it, dateArchive: now })));
+  saveCache();
+  renderListe();
+  renderArchives();
+  items.forEach(it => queueOrSend('archiver', { id: it.id }));
+  showToast(`${pluriel(items.length, 'article')} archivé${items.length > 1 ? 's' : ''}`, () => {
+    state.archives = state.archives.filter(it => !ids.has(it.id));
+    state.liste.push(...items);
+    saveCache(); renderListe(); renderArchives();
+    items.forEach(it => queueOrSend('restaurerDepuisArchive', { id: it.id }));
   }, 'inventory_2');
 }
 
@@ -480,32 +500,52 @@ function renderListe() {
   renderStatsListe(items);
   const conteneur = document.getElementById('liste-contenu');
   const vide = document.getElementById('liste-vide');
+  const btnArchiverTout = document.getElementById('btn-archiver-tout');
   if (items.length === 0) {
     conteneur.innerHTML = '';
     vide.hidden = false;
+    btnArchiverTout.hidden = true;
     return;
   }
   vide.hidden = true;
-  const groupes = groupParCategorie(items);
+
+  const actifs = items.filter(it => it.statut !== 'achete');
+  const achetes = items.filter(it => it.statut === 'achete');
+  btnArchiverTout.hidden = achetes.length === 0;
+
+  const groupes = groupParCategorie(actifs);
   const ordre = categoriesListeActive().filter(c => groupes[c]);
   Object.keys(groupes).forEach(c => { if (!ordre.includes(c)) ordre.push(c); });
 
-  conteneur.innerHTML = ordre.map(cat => {
-    const items = groupes[cat].slice().sort((a, b) => {
-      if ((a.statut === 'achete') !== (b.statut === 'achete')) return a.statut === 'achete' ? 1 : -1;
-      return (a.dateAjout || '').localeCompare(b.dateAjout || '');
-    });
-    const nbAchetes = items.filter(it => it.statut === 'achete').length;
-    return `
-      <div class="categorie-groupe">
+  let html = actifs.length === 0
+    ? '<p class="empty-state-inline">Tous les articles ont été récupérés.</p>'
+    : ordre.map(cat => {
+      const items = groupes[cat].slice().sort((a, b) => (a.dateAjout || '').localeCompare(b.dateAjout || ''));
+      return `
+        <div class="categorie-groupe">
+          <div class="categorie-entete">
+            <span class="categorie-badge">${escapeHtml(cat)}</span>
+            <span class="categorie-trait"></span>
+            <span class="categorie-compte">${items.length}</span>
+          </div>
+          ${items.map(renderItemRow).join('')}
+        </div>`;
+    }).join('');
+
+  if (achetes.length > 0) {
+    const triees = achetes.slice().sort((a, b) => (b.dateMaj || b.dateAjout || '').localeCompare(a.dateMaj || a.dateAjout || ''));
+    html += `
+      <div class="categorie-groupe categorie-groupe-recuperes">
         <div class="categorie-entete">
-          <span class="categorie-badge">${escapeHtml(cat)}</span>
+          <span class="categorie-badge categorie-badge-recuperes">Éléments récupérés</span>
           <span class="categorie-trait"></span>
-          <span class="categorie-compte">${nbAchetes}/${items.length}</span>
+          <span class="categorie-compte">${achetes.length}</span>
         </div>
-        ${items.map(renderItemRow).join('')}
+        ${triees.map(renderItemRow).join('')}
       </div>`;
-  }).join('');
+  }
+
+  conteneur.innerHTML = html;
 }
 
 function renderItemRow(item) {
@@ -693,6 +733,21 @@ function fermerModalListes() {
   document.getElementById('modal-listes').hidden = true;
   document.getElementById('modal-input-nouvelle-liste').value = '';
   modalListesModeleSource = null;
+}
+
+// ---- Modal "confirmer l'archivage de toute la liste" ----
+
+function ouvrirModalConfirmerArchiverTout() {
+  const items = articlesListeActive();
+  const liste = listeActive();
+  const nomListe = liste ? liste.nom : 'cette liste';
+  document.getElementById('modal-confirmer-archiver-tout-texte').textContent =
+    `${pluriel(items.length, 'article')} de « ${nomListe} » ${items.length > 1 ? 'seront archivés' : 'sera archivé'}, y compris ceux non cochés. Vous pourrez annuler juste après si besoin.`;
+  document.getElementById('modal-confirmer-archiver-tout').hidden = false;
+}
+
+function fermerModalConfirmerArchiverTout() {
+  document.getElementById('modal-confirmer-archiver-tout').hidden = true;
 }
 
 // ---- Champ quantité (repliable) ----
@@ -966,6 +1021,14 @@ function setupEventListeners() {
   });
 
   document.getElementById('modal-listes-fermer').addEventListener('click', fermerModalListes);
+
+  document.getElementById('btn-archiver-tout').addEventListener('click', ouvrirModalConfirmerArchiverTout);
+  document.getElementById('modal-confirmer-archiver-tout-annuler').addEventListener('click', fermerModalConfirmerArchiverTout);
+  document.getElementById('modal-confirmer-archiver-tout-fermer').addEventListener('click', fermerModalConfirmerArchiverTout);
+  document.getElementById('modal-confirmer-archiver-tout-confirmer').addEventListener('click', () => {
+    fermerModalConfirmerArchiverTout();
+    archiverToutListeActive(articlesListeActive());
+  });
 
   document.querySelectorAll('.btn-settings').forEach(btn => {
     btn.addEventListener('click', () => ouvrirEcranConfig({ obligatoire: false }));

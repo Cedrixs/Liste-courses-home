@@ -276,15 +276,29 @@ body {
   background: #fff; border: 1.5px solid var(--navy-200); color: var(--navy-700);
 }
 .btn-pill-full { width: 100%; justify-content: center; margin-top: 14px; }
+.btn-pill-danger { background: var(--danger); }
+.btn-pill-danger:active { background: #8f2f24; }
 .btn-text {
   display: block; width: 100%; text-align: center; margin-top: 6px;
   border: none; background: none; color: var(--text-secondary); font-family: inherit;
   font-size: 14px; padding: 10px; cursor: pointer;
 }
 
+/* ---- Liste : bouton discret "archiver toute la liste" ---- */
+
+.liste-toolbar { display: flex; justify-content: flex-end; margin: 0 2px 4px; min-height: 1px; }
+.btn-archiver-tout {
+  border: none; background: none; padding: 6px 4px; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.btn-archiver-tout .ms { font-size: 15px; }
+.btn-archiver-tout:active { color: var(--text-secondary); }
+
 /* ---- Liste : groupes par rayon ---- */
 
 .categorie-groupe { margin-bottom: 10px; }
+.categorie-badge-recuperes { background: #EFEDE8; color: var(--text-secondary); }
 .categorie-entete {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 4px 6px;
