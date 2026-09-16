@@ -86,6 +86,8 @@ En dernier recours (si ça ne suffit toujours pas) : réglages du navigateur > e
 index.html                    Page principale de l'appli
 style.css                     Mise en forme
 app.js                        Logique (affichage, actions, file d'attente hors-ligne)
+recettes.js                   Moteur de recettes : analyse des ingrédients, mise à l'échelle, cumul
+recettes-catalogue.js         Catalogue de ~195 recettes embarquées (entrées et plats)
 config.js                     Liste des catégories (aucune donnée sensible)
 manifest.json                 Manifeste PWA (installation sur l'écran d'accueil)
 sw.js                         Service worker (réseau d'abord, repli sur le cache hors-ligne)
@@ -93,8 +95,58 @@ icons/                        Icônes de l'appli (dont les variantes "maskable" 
 apps-script/Code.gs           Code du backend Google Apps Script à coller dans votre Google Sheet
 ```
 
+## Partir d'une recette
+
+L'onglet **Recettes** transforme une recette en liste de courses. Trois façons d'y entrer, qui aboutissent toutes au même écran d'aperçu :
+
+1. **Taper le nom d'une recette.** La recherche porte d'abord sur le catalogue embarqué (environ 195 entrées et plats : cuisine française, plats à partager, plats exotiques) et sur les recettes que vous avez déjà importées. C'est instantané et ça marche hors ligne.
+2. **Coller le lien d'une recette** (Cookomix, Marmiton, 750g, CuisineAZ...). L'Apps Script va lire la page et en extrait les ingrédients ainsi que le nombre de parts. Nécessite une connexion.
+3. **Coller la liste des ingrédients** telle que copiée sur un site. Les titres de section et les phrases de préparation sont écartés, et listés à part pour que vous puissiez vérifier que rien d'utile n'a été perdu.
+
+Sur l'écran d'aperçu, chaque ingrédient est modifiable : nom, quantité, unité, rayon. Vous indiquez pour combien de personnes la recette est prévue et pour combien vous cuisinez, et les quantités suivent. Les quantités comptables sont arrondies au supérieur (on n'achète pas 1,5 oignon) et les fonds de placard (sel, poivre, huile, beurre, farine, épices) arrivent décochés, à recocher si vous en manquez.
+
+Au bout, deux choix : **créer un modèle** réutilisable, ou **ajouter directement à une liste**. Un nom de modèle déjà pris ne remplace jamais l'ancien, il devient « Blanquette de veau (2) ».
+
+### Cumul des quantités
+
+Quand un ingrédient est déjà dans la liste avec une quantité chiffrée, les quantités s'additionnent au lieu de créer un doublon : 300 g de beurre pour un gratin plus 200 g pour une sauce donnent une seule ligne « Beurre, 500 g ». Un petit picto sur la ligne indique d'où elle vient, et un clic dessus affiche la provenance (« Gratin du soir + Sauce blanche »). Les quantités saisies en texte libre ne sont jamais fusionnées : on ne sait pas additionner « une bonne poignée ».
+
+### Fiche des modèles
+
+Chaque modèle peut porter une **description** et un **lien vers la recette d'origine**, remplis automatiquement à l'import ou saisis à la main via l'icône ✎ sur la carte du modèle. Le lien est cliquable depuis l'appli, pour retrouver la recette complète au moment de cuisiner.
+
+### Enrichir le catalogue
+
+Le catalogue est un simple fichier, [`recettes-catalogue.js`](recettes-catalogue.js) : une ligne `r(nom, tags, portions, ingrédients)` par recette. En ajouter se fait à la main ou en demandant à Claude de compléter le fichier. Rien n'est facturé à l'usage : le catalogue est embarqué dans l'appli, aucune requête n'est faite pour l'interroger.
+
+### Vérifier qu'un site est exploitable
+
+L'import par lien s'appuie sur les données structurées (schema.org `Recipe`) que les sites de recettes publient pour Google. Pour vérifier qu'un site donné fonctionne, appelez votre déploiement avec :
+
+```
+https://votre-url-apps-script/exec?action=diagnostiquerUrl&url=ADRESSE_DE_LA_RECETTE
+```
+
+La réponse indique si des ingrédients ont été trouvés, par quelle méthode, combien, et le nombre de parts détecté. Si un site ne renvoie rien, le collage du texte reste toujours possible.
+
+## Recherche internet (optionnelle, à configurer)
+
+La recherche par nom peut être étendue à internet, pour les recettes absentes du catalogue. Elle passe par l'API Google Custom Search, restreinte aux sites de recettes. Tant qu'elle n'est pas configurée, l'appli fonctionne normalement : seule cette extension reste inactive.
+
+Pour l'activer :
+
+1. Créez un moteur de recherche personnalisé sur [programmablesearchengine.google.com](https://programmablesearchengine.google.com), restreint à `cookomix.com`, `marmiton.org`, `750g.com` et `cuisineaz.com`. Notez son **ID de moteur de recherche**.
+2. Créez une clé API pour l'API « Custom Search » sur [console.cloud.google.com](https://console.cloud.google.com/apis/library/customsearch.googleapis.com).
+3. Dans votre Apps Script : **Paramètres du projet > Propriétés du script > Ajouter une propriété**, deux fois :
+   - `GOOGLE_CSE_KEY` = votre clé API
+   - `GOOGLE_CSE_ID` = l'ID du moteur de recherche
+
+La clé est stockée **uniquement dans votre Apps Script**, jamais dans ce dépôt public, et elle survit à un recollage de `Code.gs`. Aucun redéploiement n'est nécessaire : la recherche s'active dès que les deux propriétés sont présentes. Le quota gratuit est de 100 recherches par jour, très au-delà d'un usage familial.
+
 ## Journal des évolutions récentes
 
+- **Import de recettes** : nouvel onglet « Recettes » permettant de taper le nom d'une recette, de coller le lien d'une page ou d'y coller une liste d'ingrédients, puis de la transformer en modèle ou de l'ajouter directement à une liste, avec mise à l'échelle par nombre de personnes et cumul des quantités. Les modèles gagnent une fiche (description et lien vers la recette). Voir « Partir d'une recette » ci-dessus.
+  > Cette évolution ajoute les onglets `Modeles` et `Recettes` côté Google Sheet, ainsi que les colonnes `qte`, `unite` et `provenance`. Pensez à recoller le nouveau [`apps-script/Code.gs`](apps-script/Code.gs) et à redéployer une nouvelle version. **L'import par lien accède à des sites externes : Google redemandera votre autorisation une fois lors du redéploiement**, c'est normal. Rien à faire sur la feuille, la mise à jour se fait toute seule au premier appel, et les quantités déjà saisies en texte libre sont conservées telles quelles.
 - **Plusieurs listes de courses** : le titre en haut de l'onglet « Liste » devient un menu déroulant permettant de changer de liste active (ex : Alimentaire, Bricolage) ou d'en créer une nouvelle en lui donnant un nom. Chaque liste a ses propres catégories, ses propres archives, et sa propre sélection d'articles. Depuis un modèle récurrent, le bouton « Ajouter à la liste » demande désormais dans quelle liste ajouter les articles sélectionnés. Les articles de modèles peuvent aussi porter une quantité/remarque (ex : prix), affichée comme sur la liste active.
   > Une liste **Alimentaire** regroupant vos données existantes est créée automatiquement à la première exécution de la nouvelle version du script (rien à faire sur la feuille elle-même). Pensez à recoller le nouveau [`apps-script/Code.gs`](apps-script/Code.gs) dans votre Apps Script et à redéployer une nouvelle version (voir "Étape 1" ci-dessus). Aucune autre liste ni aucun modèle n'est pré-rempli par le script : ils se créent depuis l'appli (ou via son API, à la demande).
 - **Autocomplétion avec table de référence des articles** : en tapant un article, un menu déroulant propose des suggestions (issues d'une nouvelle table de référence pré-remplie d'articles courants, et de votre historique) et remplit automatiquement le rayon correspondant. Si l'article tapé est inconnu, une popup propose de l'ajouter à la table de référence (avec sa catégorie) pour le retrouver plus vite la prochaine fois ; sinon la sélection manuelle du rayon fonctionne comme avant. La recherche se fait entièrement en local (aucun aller-retour réseau à chaque frappe) pour un affichage instantané ; les données sont tenues à jour à l'ouverture de l'appli, à chaque retour au premier plan, et discrètement en tâche de fond quand vous ouvrez le champ d'ajout.

@@ -1,9 +1,12 @@
 const state = {
   liste: [],
   modeles: {},
+  modelesMeta: {},
   archives: [],
   reference: [],
   listes: [],
+  recettes: [],
+  rechercheInternet: { configuree: false },
 };
 
 let modalCurrentItem = null;
@@ -54,15 +57,19 @@ function loadCache() {
   try {
     state.liste = JSON.parse(localStorage.getItem('lc_liste') || '[]');
     state.modeles = JSON.parse(localStorage.getItem('lc_modeles') || '{}');
+    state.modelesMeta = JSON.parse(localStorage.getItem('lc_modeles_meta') || '{}');
     state.archives = JSON.parse(localStorage.getItem('lc_archives') || '[]');
     state.reference = JSON.parse(localStorage.getItem('lc_reference') || '[]');
     state.listes = JSON.parse(localStorage.getItem('lc_listes') || '[]');
+    state.recettes = JSON.parse(localStorage.getItem('lc_recettes') || '[]');
   } catch (e) { /* cache corrompu, on repart de zéro */ }
 }
 
 function saveCache() {
   localStorage.setItem('lc_liste', JSON.stringify(state.liste));
   localStorage.setItem('lc_modeles', JSON.stringify(state.modeles));
+  localStorage.setItem('lc_modeles_meta', JSON.stringify(state.modelesMeta));
+  localStorage.setItem('lc_recettes', JSON.stringify(state.recettes));
   localStorage.setItem('lc_archives', JSON.stringify(state.archives));
   localStorage.setItem('lc_reference', JSON.stringify(state.reference));
   localStorage.setItem('lc_listes', JSON.stringify(state.listes));
@@ -218,6 +225,8 @@ async function refreshFromServer() {
   const cibles = {
     liste: 'getListe', modeles: 'getModeles', archives: 'getArchives',
     reference: 'getReference', listes: 'getListes',
+    modelesMeta: 'getModelesMeta', recettes: 'getRecettes',
+    rechercheInternet: 'etatRechercheInternet',
   };
   const resultats = await Promise.allSettled(
     Object.values(cibles).map(action => apiGet(action))
@@ -413,21 +422,15 @@ function ajouterDepuisModele(modele) {
 
 function ajouterDepuisModeleVersListe(modele, listeId) {
   const items = (state.modeles[modele] || []).filter(item => estArticleSelectionne(modele, item.nom));
-  const nomsActifs = new Set(state.liste.filter(it => it.listeId === listeId).map(it => it.nom.toLowerCase()));
-  let compte = 0;
-  items.forEach(item => {
-    if (nomsActifs.has(item.nom.toLowerCase())) return;
-    const id = uuid();
-    const now = new Date().toISOString();
-    state.liste.push({ id, nom: item.nom, categorie: item.categorie, quantite: item.quantite || '', statut: 'actif', dateAjout: now, dateMaj: now, listeId });
-    nomsActifs.add(item.nom.toLowerCase());
-    queueOrSend('ajouterArticle', { id, nom: item.nom, categorie: item.categorie, quantite: item.quantite || '', listeId });
-    compte++;
-  });
-  saveCache();
-  if (listeId === getListeActiveId()) renderListe();
+  const resultat = ajouterArticlesAvecCumul(items.map(item => ({
+    nom: item.nom,
+    categorie: item.categorie,
+    quantite: item.quantite || '',
+    qte: item.qte === '' || item.qte === null || item.qte === undefined ? null : Number(item.qte),
+    unite: item.unite || '',
+  })), listeId, modele);
   const nomListe = (state.listes.find(l => l.id === listeId) || {}).nom || 'la liste';
-  showToast(compte > 0 ? `${compte} article(s) ajouté(s) à « ${nomListe} »` : 'Tous les articles sélectionnés y sont déjà');
+  showToast(messageAjout(resultat, nomListe));
 }
 
 // ---- Actions : Table de référence ----
@@ -453,6 +456,7 @@ function renderAll() {
   renderListe();
   renderModeles();
   renderArchives();
+  renderRecettes();
 }
 
 function pluriel(n, mot) { return `${n} ${mot}${n > 1 ? 's' : ''}`; }
@@ -548,16 +552,31 @@ function renderListe() {
   conteneur.innerHTML = html;
 }
 
+// Quantité affichée : le texte libre saisi à la main prime, sinon la quantité
+// structurée issue d'une recette (qte + unité).
+function quantiteAffichee(item) {
+  if (item.quantite) return String(item.quantite);
+  if (item.qte !== '' && item.qte !== null && item.qte !== undefined) {
+    return RECETTES.formatQuantite(Number(item.qte), item.unite || '');
+  }
+  return item.unite ? String(item.unite) : '';
+}
+
 function renderItemRow(item) {
   const achete = item.statut === 'achete';
-  const badgeQuantite = item.quantite
+  const quantite = quantiteAffichee(item);
+  const badgeQuantite = quantite
     ? `<button class="item-qte-badge" data-action="voir-quantite" title="Voir la quantité"><span class="ms">scale</span></button>`
     : '';
+  const badgeProvenance = item.provenance
+    ? `<button class="item-provenance-badge" data-action="voir-provenance" title="D'où vient cet article"><span class="ms">menu_book</span></button>`
+    : '';
   return `
-    <div class="item-row ${achete ? 'achete' : ''}" data-id="${item.id}" data-quantite="${escapeHtml(item.quantite || '')}">
+    <div class="item-row ${achete ? 'achete' : ''}" data-id="${item.id}" data-quantite="${escapeHtml(quantite)}" data-provenance="${escapeHtml(item.provenance || '')}">
       <button class="item-checkbox ${achete ? 'checked' : ''}" data-action="toggle" title="Marquer acheté">${achete ? '<span class="ms msf">check</span>' : ''}</button>
       <span class="item-nom">${escapeHtml(item.nom)}</span>
       ${badgeQuantite}
+      ${badgeProvenance}
       <div class="item-actions">
         <button class="icon-btn" data-action="modele" title="Ajouter à un modèle"><span class="ms">bookmark_add</span></button>
         <button class="icon-btn" data-action="archiver" title="Archiver"><span class="ms">inventory_2</span></button>
@@ -578,6 +597,15 @@ function renderModeles() {
   vide.hidden = true;
   conteneur.innerHTML = noms.map(modele => {
     const items = state.modeles[modele] || [];
+    const meta = state.modelesMeta[modele] || {};
+    const ficheHtml = (meta.description || meta.url) ? `
+          <div class="modele-fiche">
+            <span class="ms">description</span>
+            <div class="modele-fiche-texte">
+              ${meta.description ? escapeHtml(meta.description) : ''}
+              ${meta.url ? `<a class="modele-fiche-lien" href="${escapeHtml(meta.url)}" target="_blank" rel="noopener noreferrer"><span class="ms">open_in_new</span>Voir la recette</a>` : ''}
+            </div>
+          </div>` : '';
     return `
       <div class="modele-carte" data-modele="${escapeHtml(modele)}">
         <div class="modele-entete">
@@ -585,7 +613,11 @@ function renderModeles() {
             <span class="ms">bookmarks</span>
             <strong>${escapeHtml(modele)}</strong>
             <span class="modele-compte">${items.length}</span>
+            ${meta.portions ? `<span class="modele-portions">${meta.portions} pers.</span>` : ''}
+            <button type="button" class="icon-btn" data-action="editer-fiche" title="Modifier la fiche"><span class="ms">edit_note</span></button>
+            <button type="button" class="icon-btn icon-btn-danger" data-action="supprimer-modele" title="Supprimer le modèle"><span class="ms">delete</span></button>
           </div>
+          ${ficheHtml}
           ${items.length === 0 ? '' : `
           <div class="modele-actions">
             <button type="button" class="btn-pill btn-pill-compact" data-action="ajouter-depuis-modele"><span class="ms">playlist_add</span>Ajouter à la liste</button>
@@ -597,11 +629,12 @@ function renderModeles() {
         </div>
         ${items.length === 0 ? '<p class="empty-state-inline dans-carte">Aucun article dans ce modèle pour l\'instant.</p>' : items.map(item => {
           const selectionne = estArticleSelectionne(modele, item.nom);
-          const badgeQuantite = item.quantite
+          const quantite = quantiteAffichee(item);
+          const badgeQuantite = quantite
             ? `<button type="button" class="item-qte-badge" data-action="voir-quantite-modele" title="Voir la quantité"><span class="ms">scale</span></button>`
             : '';
           return `
-          <div class="modele-item ${selectionne ? 'selectionne' : ''}" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}" data-quantite="${escapeHtml(item.quantite || '')}">
+          <div class="modele-item ${selectionne ? 'selectionne' : ''}" data-id="${item.id}" data-nom="${escapeHtml(item.nom)}" data-quantite="${escapeHtml(quantite)}">
             <button type="button" class="modele-checkbox-btn ${selectionne ? 'checked' : ''}" data-action="toggle-selection" title="Sélectionner">${selectionne ? '<span class="ms msf">check</span>' : ''}</button>
             <span class="modele-item-nom">${escapeHtml(item.nom)}</span>
             ${badgeQuantite}
@@ -708,9 +741,10 @@ function ouvrirModalListes(mode, modele) {
   modalListesMode = mode;
   modalListesModeleSource = modele || null;
   const idActive = getListeActiveId();
-  document.getElementById('modal-listes-titre').textContent = mode === 'destination' ? 'Ajouter à quelle liste ?' : 'Changer de liste';
-  document.getElementById('modal-listes-soustitre').textContent = mode === 'destination'
-    ? `Les articles sélectionnés de « ${modele} » seront ajoutés à la liste choisie.`
+  const modeAjout = mode === 'destination' || mode === 'import';
+  document.getElementById('modal-listes-titre').textContent = modeAjout ? 'Ajouter à quelle liste ?' : 'Changer de liste';
+  document.getElementById('modal-listes-soustitre').textContent = modeAjout
+    ? `Les ingrédients cochés de « ${modele} » seront ajoutés à la liste choisie, en cumulant les quantités déjà présentes.`
     : 'Choisissez la liste de courses à afficher.';
   const conteneur = document.getElementById('modal-listes-liste');
   const listes = state.listes.slice().sort((a, b) => a.nom.localeCompare(b.nom));
@@ -860,6 +894,507 @@ function activerOnglet(nom) {
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== `view-${nom}`);
 }
 
+
+// ---- Ajout d'articles avec cumul des quantités ----
+//
+// Les mêmes règles tournent côté Apps Script (actionAjouterLot) : l'écran se met
+// à jour tout de suite, le serveur refait le même calcul de son côté, et les
+// deux convergent au prochain rafraîchissement.
+
+function fusionnerProvenanceLocale(ancienne, nouvelle) {
+  const parts = String(ancienne || '').split(' + ').concat(String(nouvelle || '').split(' + '))
+    .map(p => p.trim()).filter(Boolean);
+  return [...new Set(parts)].join(' + ');
+}
+
+function messageAjout(resultat, nomListe) {
+  if (resultat.ajoutes === 0 && resultat.cumules === 0) return 'Tous ces articles y sont déjà';
+  const bouts = [];
+  if (resultat.ajoutes > 0) bouts.push(`${pluriel(resultat.ajoutes, 'article')} ajouté${resultat.ajoutes > 1 ? 's' : ''}`);
+  if (resultat.cumules > 0) bouts.push(`${resultat.cumules} cumulé${resultat.cumules > 1 ? 's' : ''}`);
+  return `${bouts.join(' · ')} dans « ${nomListe} »`;
+}
+
+function ajouterArticlesAvecCumul(items, listeId, provenance) {
+  const aEnvoyer = [];
+  const resultat = { ajoutes: 0, cumules: 0 };
+
+  items.forEach(src => {
+    const item = {
+      nom: src.nom,
+      categorie: src.categorie || 'Autre',
+      quantite: src.quantite || '',
+      qte: src.qte === '' || src.qte === null || src.qte === undefined ? null : Number(src.qte),
+      unite: src.unite || '',
+      provenance: provenance || '',
+    };
+
+    // Article sans quantité chiffrée : rien à cumuler, on évite juste le doublon.
+    if (item.qte === null) {
+      const deja = state.liste.some(ex => ex.listeId === listeId
+        && RECETTES.normaliser(ex.nom) === RECETTES.normaliser(item.nom));
+      if (deja) return;
+    } else {
+      const cible = state.liste.find(ex => ex.listeId === listeId
+        && !ex.quantite
+        && ex.qte !== '' && ex.qte !== null && ex.qte !== undefined
+        && RECETTES.normaliser(ex.nom) === RECETTES.normaliser(item.nom)
+        && RECETTES.cumulables(ex.unite || '', item.unite || ''));
+      if (cible) {
+        const somme = RECETTES.additionner(Number(cible.qte), cible.unite || '', item.qte, item.unite);
+        if (somme) {
+          cible.qte = somme.qte;
+          cible.unite = somme.unite;
+          cible.provenance = fusionnerProvenanceLocale(cible.provenance, item.provenance);
+          cible.dateMaj = new Date().toISOString();
+          resultat.cumules++;
+          aEnvoyer.push(item);
+          return;
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    state.liste.push({
+      id: uuid(), nom: item.nom, categorie: item.categorie, quantite: item.quantite,
+      statut: 'actif', dateAjout: now, dateMaj: now, listeId,
+      qte: item.qte === null ? '' : item.qte, unite: item.unite, provenance: item.provenance,
+    });
+    resultat.ajoutes++;
+    aEnvoyer.push(item);
+  });
+
+  saveCache();
+  if (listeId === getListeActiveId()) renderListe();
+  if (aEnvoyer.length > 0) queueOrSend('ajouterLot', { listeId, items: aEnvoyer });
+  return resultat;
+}
+
+// ---- Onglet Recettes : recherche et points d'entrée ----
+
+function catalogueRecettes() {
+  return (typeof RECETTES_CATALOGUE !== 'undefined' && Array.isArray(RECETTES_CATALOGUE)) ? RECETTES_CATALOGUE : [];
+}
+
+function scoreRecherche(recette, requete) {
+  const nom = RECETTES.normaliser(recette.nom);
+  if (!requete) return 0;
+  if (nom === requete) return 100;
+  if (nom.indexOf(requete) === 0) return 80;
+  if (nom.indexOf(requete) !== -1) return 60;
+  const mots = requete.split(' ').filter(Boolean);
+  const trouves = mots.filter(m => nom.indexOf(m) !== -1 || (recette.tags || []).some(t => RECETTES.normaliser(t).indexOf(m) !== -1));
+  if (trouves.length === mots.length) return 40;
+  if (trouves.length > 0) return 20;
+  return 0;
+}
+
+function chercherRecettesLocales(requete) {
+  const q = RECETTES.normaliser(requete);
+  const enregistrees = state.recettes.map(r => ({ ...r, origine: 'enregistree' }));
+  const catalogue = catalogueRecettes().map(r => ({ ...r, origine: 'catalogue' }));
+  // Une recette enregistrée masque son homonyme du catalogue.
+  const nomsEnregistres = new Set(enregistrees.map(r => RECETTES.normaliser(r.nom)));
+  const toutes = enregistrees.concat(catalogue.filter(r => !nomsEnregistres.has(RECETTES.normaliser(r.nom))));
+  if (!q) return toutes.filter(r => r.origine === 'enregistree').sort((a, b) => a.nom.localeCompare(b.nom));
+  return toutes
+    .map(r => ({ recette: r, score: scoreRecherche(r, q) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.recette.nom.localeCompare(b.recette.nom))
+    .slice(0, 25)
+    .map(x => x.recette);
+}
+
+function renderStatsRecettes() {
+  const el = document.getElementById('stats-recettes');
+  if (!el) return;
+  const n = state.recettes.length;
+  const c = catalogueRecettes().length;
+  el.textContent = n === 0
+    ? `${c} recettes au catalogue`
+    : `${pluriel(n, 'recette')} enregistrée${n > 1 ? 's' : ''} · ${c} au catalogue`;
+}
+
+function renderRecettes() {
+  const conteneur = document.getElementById('recettes-resultats');
+  if (!conteneur) return;
+  renderStatsRecettes();
+  const message = document.getElementById('recettes-message');
+  const requete = document.getElementById('input-recherche-recette').value.trim();
+  const locales = chercherRecettesLocales(requete);
+
+  let html = '';
+  if (locales.length > 0) {
+    html += `<p class="recette-groupe-titre">${requete ? 'Recettes trouvées' : 'Vos recettes enregistrées'}</p>`;
+    html += locales.map(r => {
+      const nbIng = (r.ingredients || []).length;
+      const meta = [
+        r.origine === 'enregistree' ? (r.source || 'enregistrée') : 'catalogue',
+        r.portions ? `${r.portions} pers.` : '',
+        nbIng ? `${nbIng} ingrédients` : '',
+      ].filter(Boolean).join(' · ');
+      return `
+        <button type="button" class="recette-resultat" data-origine="${escapeHtml(r.origine)}" data-nom="${escapeHtml(r.nom)}">
+          <span class="ms">${r.origine === 'enregistree' ? 'bookmark' : 'menu_book'}</span>
+          <span class="recette-resultat-infos">
+            <span class="recette-resultat-nom">${escapeHtml(r.nom)}</span>
+            <span class="recette-resultat-meta">${escapeHtml(meta)}</span>
+          </span>
+          <span class="ms icon-chevron">chevron_right</span>
+        </button>`;
+    }).join('');
+  }
+
+  if (requete && resultatsInternet.length > 0) {
+    html += '<p class="recette-groupe-titre">Trouvées sur internet</p>';
+    html += resultatsInternet.map(r => `
+      <button type="button" class="recette-resultat" data-origine="internet" data-url="${escapeHtml(r.url)}" data-nom="${escapeHtml(r.titre)}">
+        <span class="ms">public</span>
+        <span class="recette-resultat-infos">
+          <span class="recette-resultat-nom">${escapeHtml(r.titre)}</span>
+          <span class="recette-resultat-meta">${escapeHtml(r.site)}</span>
+        </span>
+        <span class="ms icon-chevron">chevron_right</span>
+      </button>`).join('');
+  }
+
+  conteneur.innerHTML = html;
+
+  if (html) {
+    message.hidden = true;
+  } else {
+    message.hidden = false;
+    message.textContent = requete
+      ? "Aucune recette de ce nom. Essayez un autre mot, ou collez le lien ou les ingrédients de la recette."
+      : "Cherchez une recette par son nom, ou partez d'un lien ou d'une liste d'ingrédients collée. Les recettes importées se retrouvent ensuite ici.";
+  }
+}
+
+let resultatsInternet = [];
+let rechercheEnCours = false;
+
+async function lancerRecherche() {
+  resultatsInternet = [];
+  renderRecettes();
+  const requete = document.getElementById('input-recherche-recette').value.trim();
+  if (!requete || rechercheEnCours) return;
+  if (chercherRecettesLocales(requete).length > 0) return; // le local suffit
+  if (!state.rechercheInternet.configuree) {
+    showToast("Recherche internet non configurée (voir le README). Collez le lien ou les ingrédients.", null, 'info');
+    return;
+  }
+  rechercheEnCours = true;
+  showToast('Recherche sur internet…', null, 'public');
+  try {
+    const data = await apiGet('chercherRecette', { q: requete });
+    resultatsInternet = data.resultats || [];
+    hideToast();
+    renderRecettes();
+    if (resultatsInternet.length === 0) showToast('Aucun résultat sur internet', null, 'search_off');
+  } catch (err) {
+    hideToast();
+    showToast('Recherche internet indisponible', null, 'error');
+  } finally {
+    rechercheEnCours = false;
+  }
+}
+
+// ---- Écran d'import : analyse, aperçu, création ----
+
+let importRecette = null;
+
+function ouvrirEcranRecette(mode, donnees) {
+  importRecette = {
+    mode,
+    nom: (donnees && donnees.nom) || '',
+    description: (donnees && donnees.description) || '',
+    url: (donnees && donnees.url) || '',
+    source: (donnees && donnees.source) || '',
+    portionsSource: (donnees && donnees.portions) || 4,
+    portionsCible: (donnees && donnees.portions) || 4,
+    ingredients: [],
+    ignorees: [],
+    enregistrer: true,
+  };
+  document.getElementById('recette-nom').value = importRecette.nom;
+  document.getElementById('recette-url').value = mode === 'url' ? '' : importRecette.url;
+  document.getElementById('recette-texte').value = '';
+  document.getElementById('recette-erreur').hidden = true;
+  document.getElementById('recette-bloc-url').hidden = mode !== 'url';
+  document.getElementById('recette-bloc-texte').hidden = mode !== 'texte';
+  document.getElementById('recette-etape-libelle').textContent =
+    mode === 'url' ? 'Import par lien' : mode === 'texte' ? 'Ingrédients collés' : 'Recette';
+  document.getElementById('screen-recette').hidden = false;
+
+  if (donnees && donnees.ingredients) {
+    appliquerIngredients(donnees.ingredients, donnees);
+  } else {
+    afficherEtape('saisie');
+  }
+}
+
+function fermerEcranRecette() {
+  document.getElementById('screen-recette').hidden = true;
+  importRecette = null;
+}
+
+function afficherEtape(etape) {
+  document.getElementById('recette-etape-saisie').hidden = etape !== 'saisie';
+  document.getElementById('recette-etape-apercu').hidden = etape !== 'apercu';
+  document.getElementById('recette-actions').hidden = etape !== 'apercu';
+}
+
+// Transforme des lignes brutes en lignes d'aperçu éditables.
+function appliquerIngredients(lignes, donnees) {
+  const analyse = RECETTES.parserTexte(lignes);
+  const portions = (donnees && donnees.portions) || analyse.portions || importRecette.portionsSource || 4;
+  importRecette.portionsSource = portions;
+  importRecette.portionsCible = portions;
+  importRecette.ignorees = analyse.ignorees;
+  importRecette.ingredients = analyse.ingredients.map(ing => ({
+    nom: ing.nom,
+    categorie: RECETTES.categoriePour(ing.nom, state.reference) === 'Autre' ? ing.categorie : RECETTES.categoriePour(ing.nom, state.reference),
+    qteBase: ing.qte,
+    uniteBase: ing.unite,
+    qte: ing.qte,
+    unite: ing.unite,
+    note: ing.note,
+    basique: ing.basique,
+    coche: !ing.basique,
+    qteManuelle: false,
+  }));
+  if (donnees) {
+    if (donnees.nom) { importRecette.nom = donnees.nom; document.getElementById('recette-nom').value = donnees.nom; }
+    if (donnees.url) importRecette.url = donnees.url;
+    if (donnees.description) importRecette.description = donnees.description;
+    if (donnees.source) importRecette.source = donnees.source;
+  }
+  document.getElementById('recette-description').value = importRecette.description || '';
+  document.getElementById('recette-lien').value = importRecette.url || '';
+  renderApercuRecette();
+  afficherEtape('apercu');
+}
+
+function recalculerEchelle() {
+  const facteur = importRecette.portionsCible / importRecette.portionsSource;
+  importRecette.ingredients.forEach(ing => {
+    if (ing.qteManuelle) return;
+    const r = RECETTES.echelonnerQuantite(ing.qteBase, ing.uniteBase, facteur);
+    ing.qte = r.qte;
+    ing.unite = r.unite;
+  });
+}
+
+function renderApercuRecette() {
+  document.getElementById('portions-source').textContent = importRecette.portionsSource;
+  document.getElementById('portions-cible').textContent = importRecette.portionsCible;
+
+  const categories = categoriesListeActive();
+  document.getElementById('recette-ingredients').innerHTML = importRecette.ingredients.map((ing, i) => `
+    <div class="ing-row ${ing.coche ? '' : 'decoche'}" data-idx="${i}">
+      <div class="ing-ligne1">
+        <button type="button" class="ing-check ${ing.coche ? 'checked' : ''}" data-action="toggle-ing" aria-label="Sélectionner">${ing.coche ? '<span class="ms msf">check</span>' : ''}</button>
+        <input type="text" class="ing-nom" data-champ="nom" value="${escapeHtml(ing.nom)}" placeholder="Ingrédient">
+        ${ing.basique ? '<span class="ing-basique-badge">placard</span>' : ''}
+        <button type="button" class="ing-supprimer" data-action="supprimer-ing" aria-label="Retirer"><span class="ms">close</span></button>
+      </div>
+      <div class="ing-ligne2">
+        <input type="text" class="ing-qte" data-champ="qte" value="${escapeHtml(ing.qte === null || ing.qte === undefined ? '' : RECETTES.formatNombre(ing.qte))}" placeholder="Qté" inputmode="decimal">
+        <input type="text" class="ing-unite" data-champ="unite" value="${escapeHtml(ing.unite || '')}" placeholder="Unité">
+        <select class="ing-categorie" data-champ="categorie">
+          ${categories.map(c => `<option value="${escapeHtml(c)}" ${c === ing.categorie ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`).join('') || '<p class="empty-state-inline dans-carte">Aucun ingrédient reconnu. Ajoutez-en un ci-dessous.</p>';
+
+  const blocIgnorees = document.getElementById('recette-ignorees-bloc');
+  if (importRecette.ignorees.length === 0) {
+    blocIgnorees.hidden = true;
+  } else {
+    blocIgnorees.hidden = false;
+    document.getElementById('recette-ignorees-titre').textContent =
+      `${pluriel(importRecette.ignorees.length, 'ligne')} ignorée${importRecette.ignorees.length > 1 ? 's' : ''}`;
+    document.getElementById('recette-ignorees').innerHTML = importRecette.ignorees.map(l => `
+      <div class="recette-ignoree-ligne">${escapeHtml(l.brut)}<small>${escapeHtml(l.raison)}</small></div>`).join('');
+  }
+}
+
+async function analyserSaisie() {
+  const erreurEl = document.getElementById('recette-erreur');
+  erreurEl.hidden = true;
+
+  if (importRecette.mode === 'texte') {
+    const texte = document.getElementById('recette-texte').value.trim();
+    if (!texte) {
+      erreurEl.textContent = 'Collez d\'abord la liste des ingrédients.';
+      erreurEl.hidden = false;
+      return;
+    }
+    appliquerIngredients(texte, null);
+    return;
+  }
+
+  const url = document.getElementById('recette-url').value.trim();
+  if (!url) {
+    erreurEl.textContent = 'Collez l\'adresse de la page de la recette.';
+    erreurEl.hidden = false;
+    return;
+  }
+  const bouton = document.getElementById('recette-analyser');
+  bouton.disabled = true;
+  bouton.innerHTML = '<span class="ms">hourglass_top</span>Lecture de la page…';
+  try {
+    const recette = await apiGet('importerRecette', { url });
+    appliquerIngredients(recette.ingredients, recette);
+  } catch (err) {
+    erreurEl.textContent = err instanceof TypeError
+      ? "Pas de réseau : l'import par lien a besoin d'une connexion. Vous pouvez coller les ingrédients à la main."
+      : String(err.message || err);
+    erreurEl.hidden = false;
+  } finally {
+    bouton.disabled = false;
+    bouton.innerHTML = '<span class="ms">auto_awesome</span>Analyser';
+  }
+}
+
+function ingredientsCoches() {
+  return importRecette.ingredients.filter(ing => ing.coche && ing.nom.trim());
+}
+
+function nomRecetteSaisi() {
+  const saisi = document.getElementById('recette-nom').value.trim();
+  return saisi || importRecette.nom || 'Recette sans nom';
+}
+
+// Un nom déjà pris devient « Blanquette (2) » : on ne remplace jamais un modèle.
+function nomModeleDisponible(base) {
+  if (!state.modeles[base]) return base;
+  let n = 2;
+  while (state.modeles[`${base} (${n})`]) n++;
+  return `${base} (${n})`;
+}
+
+function enregistrerRecetteSource(nom) {
+  const lignes = importRecette.ingredients.map(ing => {
+    const q = ing.qteBase === null || ing.qteBase === undefined ? '' : RECETTES.formatNombre(ing.qteBase);
+    return [q, ing.uniteBase, ing.nom].filter(Boolean).join(' ').trim();
+  }).filter(Boolean);
+  const recette = {
+    nom,
+    source: importRecette.source || (importRecette.mode === 'texte' ? 'collée' : ''),
+    url: document.getElementById('recette-lien').value.trim(),
+    portions: importRecette.portionsSource,
+    ingredients: lignes,
+  };
+  const idx = state.recettes.findIndex(r => RECETTES.normaliser(r.nom) === RECETTES.normaliser(nom));
+  if (idx === -1) state.recettes.push(recette); else state.recettes[idx] = recette;
+  saveCache();
+  queueOrSend('enregistrerRecette', recette);
+}
+
+function creerModeleDepuisImport() {
+  const coches = ingredientsCoches();
+  if (coches.length === 0) { showToast('Aucun ingrédient coché'); return; }
+  const base = nomRecetteSaisi();
+  const modele = nomModeleDisponible(base);
+  const description = document.getElementById('recette-description').value.trim();
+  const url = document.getElementById('recette-lien').value.trim();
+
+  const items = coches.map(ing => ({
+    id: uuid(), modele, nom: ing.nom.trim(), categorie: ing.categorie,
+    quantite: '', qte: ing.qte === null || ing.qte === undefined ? '' : ing.qte, unite: ing.unite || '',
+  }));
+
+  state.modeles[modele] = items;
+  state.modelesMeta[modele] = { nom: modele, description, url, portions: importRecette.portionsCible };
+  saveCache();
+  queueOrSend('creerModeleDepuisRecette', {
+    modele, description, url, portions: importRecette.portionsCible,
+    items: items.map(it => ({ nom: it.nom, categorie: it.categorie, qte: it.qte, unite: it.unite, quantite: '' })),
+  });
+  enregistrerRecetteSource(base);
+  renderModeles();
+  renderRecettes();
+  fermerEcranRecette();
+  activerOnglet('modeles');
+  showToast(`Modèle « ${modele} » créé (${pluriel(items.length, 'article')})`, null, 'bookmark_add');
+}
+
+function ajouterImportALaListe(listeId) {
+  const coches = ingredientsCoches();
+  if (coches.length === 0) { showToast('Aucun ingrédient coché'); return; }
+  const nom = nomRecetteSaisi();
+  const resultat = ajouterArticlesAvecCumul(coches.map(ing => ({
+    nom: ing.nom.trim(), categorie: ing.categorie, quantite: '',
+    qte: ing.qte === null || ing.qte === undefined ? null : ing.qte, unite: ing.unite || '',
+  })), listeId, nom);
+  enregistrerRecetteSource(nom);
+  renderRecettes();
+  fermerEcranRecette();
+  activerOnglet('liste');
+  const nomListe = (state.listes.find(l => l.id === listeId) || {}).nom || 'la liste';
+  showToast(messageAjout(resultat, nomListe));
+}
+
+// ---- Fiche d'un modèle (description et lien) ----
+
+let ficheModeleCourant = null;
+
+function ouvrirModalFiche(modele) {
+  ficheModeleCourant = modele;
+  const meta = state.modelesMeta[modele] || {};
+  document.getElementById('modal-fiche-soustitre').textContent = `Modèle « ${modele} »`;
+  document.getElementById('modal-fiche-description').value = meta.description || '';
+  document.getElementById('modal-fiche-url').value = meta.url || '';
+  document.getElementById('modal-fiche-modele').hidden = false;
+}
+
+function fermerModalFiche() {
+  document.getElementById('modal-fiche-modele').hidden = true;
+  ficheModeleCourant = null;
+}
+
+function enregistrerFicheModele() {
+  if (!ficheModeleCourant) return;
+  const modele = ficheModeleCourant;
+  const ancienne = state.modelesMeta[modele] || {};
+  const meta = {
+    nom: modele,
+    description: document.getElementById('modal-fiche-description').value.trim(),
+    url: document.getElementById('modal-fiche-url').value.trim(),
+    portions: ancienne.portions || null,
+  };
+  state.modelesMeta[modele] = meta;
+  saveCache();
+  queueOrSend('enregistrerModeleMeta', meta);
+  fermerModalFiche();
+  renderModeles();
+  showToast('Fiche enregistrée', null, 'edit_note');
+}
+
+function supprimerModele(modele) {
+  const items = state.modeles[modele] || [];
+  const meta = state.modelesMeta[modele] || null;
+  delete state.modeles[modele];
+  delete state.modelesMeta[modele];
+  saveCache();
+  renderModeles();
+  queueOrSend('supprimerModele', { modele });
+  showToast(`Modèle « ${modele} » supprimé`, () => {
+    state.modeles[modele] = items;
+    if (meta) state.modelesMeta[modele] = meta;
+    saveCache();
+    renderModeles();
+    queueOrSend('creerModeleDepuisRecette', {
+      modele,
+      description: meta ? meta.description : '',
+      url: meta ? meta.url : '',
+      portions: meta ? meta.portions : '',
+      items: items.map(it => ({ nom: it.nom, categorie: it.categorie, qte: it.qte, unite: it.unite, quantite: it.quantite || '' })),
+    });
+  }, 'delete');
+}
+
 // ---- Câblage des évènements ----
 
 function setupEventListeners() {
@@ -936,6 +1471,14 @@ function setupEventListeners() {
         showToast(`Quantité : ${row.dataset.quantite}`, null, 'scale');
         toastQuantiteId = id;
       }
+    } else if (action === 'voir-provenance') {
+      const toast = document.getElementById('toast');
+      if (!toast.hidden && toastQuantiteId === 'prov-' + id) {
+        hideToast();
+      } else {
+        showToast(`Vient de : ${row.dataset.provenance}`, null, 'menu_book');
+        toastQuantiteId = 'prov-' + id;
+      }
     }
   });
 
@@ -952,6 +1495,8 @@ function setupEventListeners() {
     const modele = carte.dataset.modele;
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'ajouter-depuis-modele') ajouterDepuisModele(modele);
+    else if (action === 'editer-fiche') ouvrirModalFiche(modele);
+    else if (action === 'supprimer-modele') supprimerModele(modele);
     else if (action === 'supprimer-du-modele') {
       const id = e.target.closest('.modele-item').dataset.id;
       supprimerDuModele(modele, id);
@@ -1004,7 +1549,8 @@ function setupEventListeners() {
     const btn = e.target.closest('.modele-choix-btn');
     if (!btn) return;
     const listeId = btn.dataset.listeId;
-    if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, listeId);
+    if (modalListesMode === 'import') ajouterImportALaListe(listeId);
+    else if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, listeId);
     else changerListeActive(listeId);
     fermerModalListes();
   });
@@ -1015,7 +1561,8 @@ function setupEventListeners() {
     const nom = input.value.trim();
     if (!nom) return;
     const liste = creerListe(nom);
-    if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, liste.id);
+    if (modalListesMode === 'import') ajouterImportALaListe(liste.id);
+    else if (modalListesMode === 'destination') ajouterDepuisModeleVersListe(modalListesModeleSource, liste.id);
     else changerListeActive(liste.id);
     fermerModalListes();
   });
@@ -1046,6 +1593,144 @@ function setupEventListeners() {
   });
 
   document.getElementById('config-annuler').addEventListener('click', fermerEcranConfig);
+
+  // ---- Onglet Recettes ----
+
+  document.getElementById('input-recherche-recette').addEventListener('input', () => {
+    resultatsInternet = [];
+    renderRecettes();
+  });
+
+  document.getElementById('form-recherche-recette').addEventListener('submit', (e) => {
+    e.preventDefault();
+    document.getElementById('input-recherche-recette').blur();
+    lancerRecherche();
+  });
+
+  document.getElementById('btn-import-url').addEventListener('click', () => ouvrirEcranRecette('url'));
+  document.getElementById('btn-import-texte').addEventListener('click', () => ouvrirEcranRecette('texte'));
+
+  document.getElementById('recettes-resultats').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.recette-resultat');
+    if (!btn) return;
+    const origine = btn.dataset.origine;
+    if (origine === 'internet') {
+      showToast('Lecture de la recette…', null, 'hourglass_top');
+      try {
+        const recette = await apiGet('importerRecette', { url: btn.dataset.url });
+        hideToast();
+        ouvrirEcranRecette('url', recette);
+      } catch (err) {
+        hideToast();
+        showToast("Cette page n'a pas pu être lue. Collez les ingrédients à la main.", null, 'error');
+      }
+      return;
+    }
+    const nomCherche = RECETTES.normaliser(btn.dataset.nom);
+    const source = origine === 'enregistree'
+      ? state.recettes.find(r => RECETTES.normaliser(r.nom) === nomCherche)
+      : catalogueRecettes().find(r => RECETTES.normaliser(r.nom) === nomCherche);
+    if (source) ouvrirEcranRecette('catalogue', source);
+  });
+
+  // ---- Écran d'import ----
+
+  document.getElementById('recette-retour').addEventListener('click', fermerEcranRecette);
+  document.getElementById('recette-analyser').addEventListener('click', () => {
+    if (importRecette) analyserSaisie();
+  });
+
+  document.querySelectorAll('.portions-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!importRecette) return;
+      const champ = btn.dataset.portions === 'source' ? 'portionsSource' : 'portionsCible';
+      const valeur = importRecette[champ] + Number(btn.dataset.delta);
+      importRecette[champ] = Math.min(50, Math.max(1, valeur));
+      recalculerEchelle();
+      renderApercuRecette();
+    });
+  });
+
+  document.getElementById('recette-tout-cocher').addEventListener('click', () => {
+    if (!importRecette) return;
+    importRecette.ingredients.forEach(ing => { ing.coche = true; });
+    renderApercuRecette();
+  });
+  document.getElementById('recette-tout-decocher').addEventListener('click', () => {
+    if (!importRecette) return;
+    importRecette.ingredients.forEach(ing => { ing.coche = false; });
+    renderApercuRecette();
+  });
+
+  document.getElementById('recette-ajouter-ligne').addEventListener('click', () => {
+    if (!importRecette) return;
+    importRecette.ingredients.push({
+      nom: '', categorie: categoriesListeActive()[0] || 'Autre',
+      qteBase: null, uniteBase: '', qte: null, unite: '', note: '',
+      basique: false, coche: true, qteManuelle: true,
+    });
+    renderApercuRecette();
+    const champs = document.querySelectorAll('#recette-ingredients .ing-nom');
+    if (champs.length) champs[champs.length - 1].focus();
+  });
+
+  const conteneurIng = document.getElementById('recette-ingredients');
+
+  conteneurIng.addEventListener('click', (e) => {
+    const row = e.target.closest('.ing-row');
+    if (!row || !importRecette) return;
+    const idx = Number(row.dataset.idx);
+    const action = e.target.closest('[data-action]')?.dataset.action;
+    if (action === 'toggle-ing') {
+      importRecette.ingredients[idx].coche = !importRecette.ingredients[idx].coche;
+      renderApercuRecette();
+    } else if (action === 'supprimer-ing') {
+      importRecette.ingredients.splice(idx, 1);
+      renderApercuRecette();
+    }
+  });
+
+  // Les champs sont lus au fil de la frappe pour ne rien perdre au moment de
+  // valider, sans redessiner la liste (ce qui ferait perdre le focus).
+  conteneurIng.addEventListener('input', (e) => {
+    const row = e.target.closest('.ing-row');
+    if (!row || !importRecette) return;
+    const ing = importRecette.ingredients[Number(row.dataset.idx)];
+    const champ = e.target.dataset.champ;
+    if (champ === 'nom') {
+      ing.nom = e.target.value;
+    } else if (champ === 'unite') {
+      ing.unite = e.target.value.trim();
+      ing.qteManuelle = true;
+    } else if (champ === 'qte') {
+      const valeur = e.target.value.trim().replace(',', '.');
+      ing.qte = valeur === '' ? null : (isNaN(Number(valeur)) ? ing.qte : Number(valeur));
+      ing.qteManuelle = true;
+    } else if (champ === 'categorie') {
+      ing.categorie = e.target.value;
+    }
+  });
+
+  conteneurIng.addEventListener('change', (e) => {
+    if (e.target.dataset.champ !== 'categorie') return;
+    const row = e.target.closest('.ing-row');
+    if (row) importRecette.ingredients[Number(row.dataset.idx)].categorie = e.target.value;
+  });
+
+  document.getElementById('recette-creer-modele').addEventListener('click', () => {
+    if (importRecette) creerModeleDepuisImport();
+  });
+  document.getElementById('recette-ajouter-liste').addEventListener('click', () => {
+    if (!importRecette) return;
+    if (ingredientsCoches().length === 0) { showToast('Aucun ingrédient coché'); return; }
+    ouvrirModalListes('import', nomRecetteSaisi());
+  });
+
+  // ---- Fiche d'un modèle ----
+
+  document.getElementById('modal-fiche-enregistrer').addEventListener('click', enregistrerFicheModele);
+  document.getElementById('modal-fiche-annuler').addEventListener('click', fermerModalFiche);
+  document.getElementById('modal-fiche-fermer').addEventListener('click', fermerModalFiche);
 
   window.addEventListener('online', () => { updateOfflineBanner(); flushQueue(); refreshFromServer(); });
   window.addEventListener('offline', updateOfflineBanner);

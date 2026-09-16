@@ -1,10 +1,12 @@
-const CACHE_NAME = 'liste-courses-v8';
+const CACHE_NAME = 'liste-courses-v9';
 const SHELL_FILES = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './config.js',
+  './recettes.js',
+  './recettes-catalogue.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
