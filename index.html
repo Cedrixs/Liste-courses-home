@@ -93,6 +93,34 @@
   </div>
 </main>
 
+<main id="view-recettes" class="view" hidden>
+  <header class="compact-header">
+    <img src="icons/icon-192.png" alt="" class="compact-logo">
+    <div class="compact-titles">
+      <h1 class="compact-title">Recettes</h1>
+      <p class="compact-stats" id="stats-recettes"></p>
+    </div>
+    <button type="button" class="btn-settings" title="Réglages de connexion"><span class="ms">settings</span></button>
+  </header>
+
+  <div class="view-scroll">
+    <div class="carte-nouveau-modele">
+      <p class="carte-label">Partir d'une recette</p>
+      <form id="form-recherche-recette" class="nouveau-modele-row" autocomplete="off">
+        <input id="input-recherche-recette" type="text" placeholder="Nom d'une recette…">
+        <button type="submit" class="btn-pill btn-pill-compact"><span class="ms">search</span>Chercher</button>
+      </form>
+      <div class="recette-sources">
+        <button type="button" class="btn-pill btn-pill-outline btn-pill-compact" id="btn-import-url"><span class="ms">link</span>Coller un lien</button>
+        <button type="button" class="btn-pill btn-pill-outline btn-pill-compact" id="btn-import-texte"><span class="ms">content_paste</span>Coller les ingrédients</button>
+      </div>
+    </div>
+
+    <div id="recettes-resultats"></div>
+    <p id="recettes-message" class="empty-state-inline" hidden></p>
+  </div>
+</main>
+
 <main id="view-archives" class="view" hidden>
   <header class="compact-header">
     <img src="icons/icon-192.png" alt="" class="compact-logo">
@@ -118,6 +146,10 @@
   <button class="tab-btn" data-tab="modeles">
     <span class="tab-pill"><span class="ms tab-icon">bookmarks</span></span>
     <span class="tab-label">Modèles</span>
+  </button>
+  <button class="tab-btn" data-tab="recettes">
+    <span class="tab-pill"><span class="ms tab-icon">menu_book</span></span>
+    <span class="tab-label">Recettes</span>
   </button>
   <button class="tab-btn" data-tab="archives">
     <span class="tab-pill"><span class="ms tab-icon">inventory_2</span></span>
@@ -198,6 +230,116 @@
   </div>
 </div>
 
+<div id="screen-recette" class="recette-screen" hidden>
+  <header class="recette-entete">
+    <button type="button" id="recette-retour" class="modal-close" aria-label="Retour"><span class="ms">arrow_back</span></button>
+    <div class="recette-entete-titres">
+      <p class="recette-entete-eyebrow" id="recette-etape-libelle">Nouvelle recette</p>
+      <input id="recette-nom" class="recette-nom-input" type="text" placeholder="Nom de la recette" autocomplete="off">
+    </div>
+  </header>
+
+  <div class="recette-scroll">
+    <section id="recette-etape-saisie">
+      <div class="recette-bloc" id="recette-bloc-url" hidden>
+        <p class="carte-label">Lien de la recette</p>
+        <p class="recette-aide">Collez l'adresse de la page (Cookomix, Marmiton, 750g, CuisineAZ…). Les ingrédients et le nombre de parts sont récupérés automatiquement.</p>
+        <div class="config-input-row">
+          <span class="ms">link</span>
+          <input id="recette-url" type="url" placeholder="https://www.cookomix.com/recettes/…" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="recette-bloc" id="recette-bloc-texte" hidden>
+        <p class="carte-label">Ingrédients collés</p>
+        <p class="recette-aide">Collez la liste telle quelle, une ligne par ingrédient. Les titres de section et les étapes de préparation sont ignorés.</p>
+        <textarea id="recette-texte" rows="9" placeholder="200 g de farine&#10;2 oeufs&#10;1 cuillère à soupe d'huile d'olive&#10;Sel, poivre"></textarea>
+      </div>
+
+      <p id="recette-erreur" class="config-erreur" hidden></p>
+      <button type="button" id="recette-analyser" class="btn-pill btn-pill-full"><span class="ms">auto_awesome</span>Analyser</button>
+    </section>
+
+    <section id="recette-etape-apercu" hidden>
+      <div class="recette-bloc">
+        <p class="carte-label">Nombre de personnes</p>
+        <div class="portions-row">
+          <div class="portions-champ">
+            <span class="portions-label">Recette pour</span>
+            <div class="portions-stepper">
+              <button type="button" class="portions-btn" data-portions="source" data-delta="-1" aria-label="Moins"><span class="ms">remove</span></button>
+              <span id="portions-source">4</span>
+              <button type="button" class="portions-btn" data-portions="source" data-delta="1" aria-label="Plus"><span class="ms">add</span></button>
+            </div>
+          </div>
+          <span class="ms portions-fleche">arrow_forward</span>
+          <div class="portions-champ">
+            <span class="portions-label">Je veux pour</span>
+            <div class="portions-stepper portions-stepper-cible">
+              <button type="button" class="portions-btn" data-portions="cible" data-delta="-1" aria-label="Moins"><span class="ms">remove</span></button>
+              <span id="portions-cible">4</span>
+              <button type="button" class="portions-btn" data-portions="cible" data-delta="1" aria-label="Plus"><span class="ms">add</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recette-bloc">
+        <div class="recette-bloc-entete">
+          <p class="carte-label">Ingrédients</p>
+          <div class="modele-selection-liens">
+            <button type="button" class="lien-selection selectionner" id="recette-tout-cocher">Tout cocher</button>
+            <button type="button" class="lien-selection enlever" id="recette-tout-decocher">Tout décocher</button>
+          </div>
+        </div>
+        <div id="recette-ingredients"></div>
+        <button type="button" id="recette-ajouter-ligne" class="btn-texte-ajout"><span class="ms">add</span>Ajouter un ingrédient</button>
+      </div>
+
+      <details class="recette-bloc recette-ignorees" id="recette-ignorees-bloc" hidden>
+        <summary id="recette-ignorees-titre">Lignes ignorées</summary>
+        <div id="recette-ignorees"></div>
+      </details>
+
+      <div class="recette-bloc">
+        <p class="carte-label">Fiche du modèle</p>
+        <textarea id="recette-description" rows="2" placeholder="Description (facultatif)"></textarea>
+        <div class="config-input-row">
+          <span class="ms">link</span>
+          <input id="recette-lien" type="url" placeholder="Lien vers la recette (facultatif)" autocomplete="off">
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="recette-actions" id="recette-actions" hidden>
+    <button type="button" id="recette-ajouter-liste" class="btn-pill btn-pill-outline"><span class="ms">playlist_add</span>Ajouter à la liste</button>
+    <button type="button" id="recette-creer-modele" class="btn-pill"><span class="ms">bookmark_add</span>Créer le modèle</button>
+  </footer>
+</div>
+
+<div id="modal-fiche-modele" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3>Fiche du modèle</h3>
+      <button type="button" id="modal-fiche-fermer" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <p class="modal-soustitre" id="modal-fiche-soustitre"></p>
+    <div class="modal-fiche-corps">
+      <textarea id="modal-fiche-description" rows="2" placeholder="Description (facultatif)"></textarea>
+      <div class="config-input-row">
+        <span class="ms">link</span>
+        <input id="modal-fiche-url" type="url" placeholder="Lien vers la recette (facultatif)" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-reference-actions">
+      <button type="button" id="modal-fiche-annuler" class="btn-pill btn-pill-outline">Annuler</button>
+      <button type="button" id="modal-fiche-enregistrer" class="btn-pill"><span class="ms">check</span>Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div id="screen-config" class="config-screen" hidden>
   <div class="config-wrap">
     <img src="icons/icon-192.png" alt="Rue Felix" class="config-logo">
@@ -221,6 +363,8 @@
 </div>
 
 <script src="config.js"></script>
+<script src="recettes.js"></script>
+<script src="recettes-catalogue.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

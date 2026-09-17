@@ -383,7 +383,10 @@ body {
   overflow: hidden;
 }
 .modele-entete { padding: 13px 14px 12px; }
-.modele-entete-titre { display: flex; align-items: center; gap: 10px; }
+.modele-entete-titre { display: flex; align-items: center; gap: 8px; }
+/* Le nom peut être long (« Tajine d'agneau aux pruneaux ») : il absorbe le
+   retour à la ligne, les boutons et badges gardent leur taille. */
+.modele-entete-titre .icon-btn, .modele-entete-titre .modele-portions { flex: none; }
 .modele-entete-titre .ms { font-size: 22px; color: var(--navy-700); }
 .modele-entete-titre strong { flex: 1; min-width: 0; font-size: 18px; font-weight: 700; letter-spacing: -.2px; }
 .modele-compte {
@@ -598,3 +601,198 @@ body {
 .config-input-row input::placeholder { color: var(--text-muted); }
 .config-erreur { color: var(--danger); font-size: 0.85rem; margin: 10px 0 0; }
 .config-note { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 14px 0 0; text-align: center; }
+
+/* ---- Onglet Recettes ---- */
+
+.recette-sources {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.recette-sources .btn-pill { flex: 1; justify-content: center; padding: 0 10px; font-size: 14px; }
+.recette-sources .btn-pill .ms { font-size: 18px; }
+
+.recette-resultat {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px;
+  padding: 11px 12px; margin-bottom: 8px; box-shadow: var(--shadow-card);
+  font-family: inherit; font-size: 15px; color: var(--text); cursor: pointer;
+}
+.recette-resultat:active { background: var(--navy-100); }
+.recette-resultat .ms { color: var(--navy-500); flex: none; }
+.recette-resultat-infos { flex: 1; min-width: 0; }
+.recette-resultat-nom { display: block; font-weight: 600; }
+.recette-resultat-meta {
+  display: block; font-size: 12.5px; color: var(--text-secondary); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recette-groupe-titre {
+  margin: 16px 2px 8px; font-size: 12px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.recette-groupe-titre:first-child { margin-top: 2px; }
+
+/* ---- Écran d'import d'une recette ---- */
+
+.recette-screen {
+  /* Au-dessus de la barre d'onglets (20), mais sous le toast (30) et sous les
+     fenêtres de choix (40) qui s'ouvrent depuis cet écran. */
+  position: fixed; inset: 0; z-index: 25;
+  background: var(--bg-app); display: flex; flex-direction: column;
+}
+.recette-entete {
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  background: var(--navy-900); color: #fff;
+}
+.recette-entete .modal-close { background: rgba(255,255,255,.14); color: #fff; }
+.recette-entete-titres { flex: 1; min-width: 0; }
+.recette-entete-eyebrow {
+  margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--navy-300);
+}
+.recette-nom-input {
+  width: 100%; border: none; background: transparent; color: #fff;
+  font-family: inherit; font-size: 20px; font-weight: 700; letter-spacing: -.2px;
+  padding: 2px 0; outline: none;
+}
+.recette-nom-input::placeholder { color: rgba(255,255,255,.5); }
+
+.recette-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 20px; }
+
+.recette-bloc {
+  background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+  padding: 12px; margin-bottom: 14px; box-shadow: var(--shadow-card);
+}
+.recette-bloc-entete { display: flex; align-items: center; gap: 10px; }
+.recette-bloc-entete .carte-label { flex: 1; margin-bottom: 9px; }
+.recette-aide { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.recette-bloc textarea, .recette-screen textarea {
+  width: 100%; border: 1.5px solid var(--card-border); border-radius: 12px;
+  padding: 10px 12px; font-family: inherit; font-size: 16px; color: var(--text);
+  background: #fff; resize: vertical; outline: none; margin-bottom: 8px;
+}
+.recette-bloc textarea:focus { border-color: var(--navy-500); }
+.btn-texte-ajout {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 6px;
+  background: none; border: none; padding: 6px 2px; cursor: pointer;
+  font-family: inherit; font-size: 14.5px; font-weight: 600; color: var(--navy-700);
+}
+.btn-texte-ajout .ms { font-size: 18px; }
+
+/* Nombre de personnes */
+.portions-row { display: flex; align-items: flex-end; gap: 10px; }
+.portions-champ { flex: 1; min-width: 0; }
+.portions-label {
+  display: block; font-size: 12.5px; color: var(--text-secondary); margin-bottom: 5px;
+}
+.portions-stepper {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  border: 1.5px solid var(--card-border); border-radius: 12px; padding: 4px;
+  font-size: 18px; font-weight: 700;
+}
+.portions-stepper-cible { border-color: var(--navy-500); background: var(--navy-100); }
+.portions-btn {
+  width: 34px; height: 34px; flex: none; border: none; border-radius: 9px;
+  background: var(--navy-100); color: var(--navy-700); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.portions-stepper-cible .portions-btn { background: #fff; }
+.portions-btn .ms { font-size: 19px; }
+.portions-fleche { color: var(--icon-muted); padding-bottom: 14px; }
+
+/* Ligne d'ingrédient éditable */
+.ing-row {
+  border-top: 1px solid var(--card-border-soft); padding: 9px 0 10px;
+}
+.ing-row:first-child { border-top: none; }
+.ing-row.decoche { opacity: .52; }
+.ing-ligne1 { display: flex; align-items: center; gap: 9px; }
+.ing-check {
+  width: 26px; height: 26px; flex: none; border-radius: 8px; cursor: pointer;
+  border: 2px solid var(--navy-200); background: #fff; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.ing-check.checked { background: var(--navy-700); border-color: var(--navy-700); }
+.ing-check .ms { font-size: 17px; }
+.ing-nom {
+  flex: 1; min-width: 0; border: none; border-bottom: 1px solid transparent;
+  background: transparent; font-family: inherit; font-size: 16px; font-weight: 600;
+  color: var(--text); padding: 3px 0; outline: none;
+}
+.ing-nom:focus { border-bottom-color: var(--navy-500); }
+.ing-supprimer {
+  width: 32px; height: 32px; flex: none; border: none; border-radius: 50%;
+  background: none; color: var(--icon-muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ing-supprimer .ms { font-size: 19px; }
+.ing-ligne2 { display: flex; align-items: center; gap: 6px; margin: 6px 0 0 35px; }
+.ing-qte, .ing-unite {
+  border: 1.5px solid var(--card-border); border-radius: 9px; background: #fff;
+  font-family: inherit; font-size: 14px; color: var(--text); padding: 6px 8px; outline: none;
+  min-width: 0;
+}
+.ing-qte { width: 62px; text-align: center; }
+.ing-unite { width: 92px; }
+.ing-qte:focus, .ing-unite:focus { border-color: var(--navy-500); }
+.ing-categorie {
+  flex: 1; min-width: 0; border: 1.5px solid var(--card-border); border-radius: 9px;
+  background: #fff; font-family: inherit; font-size: 14px; color: var(--text-secondary);
+  padding: 6px 8px; outline: none;
+}
+.ing-basique-badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-muted); background: var(--bg-app); border-radius: 6px; padding: 3px 6px;
+  flex: none;
+}
+
+.recette-ignorees { font-size: 14px; }
+.recette-ignorees summary {
+  cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.recette-ignoree-ligne {
+  margin-top: 8px; font-size: 13.5px; color: var(--text-secondary); line-height: 1.4;
+}
+.recette-ignoree-ligne small { display: block; color: var(--text-muted); font-size: 12px; }
+
+.recette-actions {
+  display: flex; gap: 8px; padding: 10px 14px calc(12px + env(safe-area-inset-bottom));
+  background: #fff; border-top: 1px solid var(--card-border);
+}
+.recette-actions .btn-pill {
+  flex: 1; justify-content: center; padding: 0 10px; font-size: 14.5px;
+  white-space: nowrap; gap: 6px;
+}
+.recette-actions .btn-pill .ms { font-size: 19px; }
+
+/* ---- Fiche de modèle (description + lien) ---- */
+
+.modele-fiche {
+  display: flex; align-items: flex-start; gap: 8px; padding: 2px 2px 10px;
+  font-size: 13.5px; line-height: 1.45; color: var(--text-secondary);
+}
+.modele-fiche .ms { font-size: 17px; color: var(--icon-muted); flex: none; margin-top: 1px; }
+.modele-fiche-texte { flex: 1; min-width: 0; }
+.modele-fiche-lien {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+  color: var(--navy-700); font-weight: 600; text-decoration: none; word-break: break-word;
+}
+.modele-fiche-lien .ms { font-size: 15px; color: var(--navy-700); margin: 0; }
+.modele-portions {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  background: var(--bg-app); border-radius: 8px; padding: 3px 7px; flex: none;
+}
+.modal-fiche-corps { padding: 0 16px 6px; }
+.modal-fiche-corps textarea {
+  width: 100%; border: 1.5px solid var(--card-border); border-radius: 12px;
+  padding: 10px 12px; font-family: inherit; font-size: 16px; color: var(--text);
+  background: #fff; resize: vertical; outline: none; margin-bottom: 8px;
+}
+
+/* Badge de provenance sur une ligne de liste */
+.item-provenance-badge {
+  width: 28px; height: 28px; flex: none; border: none; border-radius: 50%;
+  background: none; color: var(--navy-icon-muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.item-provenance-badge .ms { font-size: 17px; }
