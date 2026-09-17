@@ -976,17 +976,35 @@ function catalogueRecettes() {
   return (typeof RECETTES_CATALOGUE !== 'undefined' && Array.isArray(RECETTES_CATALOGUE)) ? RECETTES_CATALOGUE : [];
 }
 
+// Mots trop courants pour signifier quoi que ce soit dans une recherche : les
+// ignorer évite qu'une recherche absente du catalogue (ex. "tajine de
+// crevettes") ne matche à tort "tajine d'agneau" via le seul mot "de".
+const MOTS_VIDES_RECHERCHE = new Set([
+  'de', 'des', 'du', 'la', 'le', 'les', 'et', 'a', 'à', 'au', 'aux', 'un', 'une',
+  'en', 'sur', 'avec', 'sans', 'pour',
+]);
+
 function scoreRecherche(recette, requete) {
   const nom = RECETTES.normaliser(recette.nom);
   if (!requete) return 0;
   if (nom === requete) return 100;
   if (nom.indexOf(requete) === 0) return 80;
   if (nom.indexOf(requete) !== -1) return 60;
-  const mots = requete.split(' ').filter(Boolean);
+  const mots = requete.split(' ').filter(m => m && !MOTS_VIDES_RECHERCHE.has(m));
+  if (mots.length === 0) return 0;
   const trouves = mots.filter(m => nom.indexOf(m) !== -1 || (recette.tags || []).some(t => RECETTES.normaliser(t).indexOf(m) !== -1));
   if (trouves.length === mots.length) return 40;
   if (trouves.length > 0) return 20;
   return 0;
+}
+
+// Un score élevé (le nom du plat contient vraiment la recherche) suffit à
+// considérer que le catalogue a répondu. Un score faible (un seul mot en
+// commun) ne doit jamais empêcher silencieusement la recherche internet.
+function meilleurScoreLocal(requete) {
+  const q = RECETTES.normaliser(requete);
+  const toutes = state.recettes.concat(catalogueRecettes());
+  return toutes.reduce((max, r) => Math.max(max, scoreRecherche(r, q)), 0);
 }
 
 function chercherRecettesLocales(requete) {
@@ -1077,8 +1095,15 @@ async function lancerRecherche() {
   resultatsInternet = [];
   renderRecettes();
   const requete = document.getElementById('input-recherche-recette').value.trim();
-  if (!requete || rechercheEnCours) return;
-  if (chercherRecettesLocales(requete).length > 0) return; // le local suffit
+  if (!requete) return;
+  if (rechercheEnCours) { showToast('Recherche déjà en cours…', null, 'public'); return; }
+  // Un nom de plat déjà bien reconnu localement (score élevé) rend la
+  // recherche internet inutile ; un vague mot en commun ne compte pas assez
+  // pour la bloquer en silence — dans ce cas on interroge quand même internet.
+  if (meilleurScoreLocal(requete) >= 60) {
+    showToast('Déjà dans votre catalogue ou vos recettes', null, 'menu_book');
+    return;
+  }
   if (!state.rechercheInternet.configuree) {
     showToast("Recherche internet non configurée (voir le README). Collez le lien ou les ingrédients.", null, 'info');
     return;
@@ -1093,7 +1118,10 @@ async function lancerRecherche() {
     if (resultatsInternet.length === 0) showToast('Aucun résultat sur internet', null, 'search_off');
   } catch (err) {
     hideToast();
-    showToast('Recherche internet indisponible', null, 'error');
+    // Le message du serveur (clé invalide, quota dépassé...) aide à
+    // diagnostiquer plutôt qu'un "indisponible" générique.
+    const detail = err instanceof TypeError ? 'pas de réseau' : String(err.message || err);
+    showToast(`Recherche internet impossible : ${detail}`, null, 'error');
   } finally {
     rechercheEnCours = false;
   }
