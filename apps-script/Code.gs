@@ -869,6 +869,25 @@ function actionEnregistrerRecette(payload) {
 // L'extraction s'appuie sur le bloc JSON-LD schema.org "Recipe" que les sites
 // publient pour Google, avec un repli sur les microdonnées.
 
+// Étape à exécuter une fois, à la main, après avoir collé ce fichier : créer
+// une nouvelle version de déploiement n'autorise PAS automatiquement l'accès
+// à des sites externes, parce que l'écran de consentement ne peut s'afficher
+// que quand une fonction est lancée depuis cet éditeur (un appel venant de
+// l'appli, exécuté "en tant que vous" mais sans personne pour cliquer sur
+// "Autoriser", échoue silencieusement avec "vous n'êtes pas autorisé...").
+//
+// Marche à suivre : dans le menu déroulant en haut de cet éditeur (à côté du
+// bouton ▷ Exécuter), choisissez "autoriserAccesExterne", cliquez sur
+// Exécuter, puis sur "Vérifier les autorisations" > votre compte Google >
+// "Paramètres avancés" > "Accéder à (nom du projet) (non sécurisé)" >
+// Autoriser. C'est normal que Google affiche cet avertissement : c'est votre
+// propre script, jamais publié ni vérifié par Google. Une fois fait, l'import
+// par lien fonctionne, y compris depuis l'appli.
+function autoriserAccesExterne() {
+  const reponse = UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
+  Logger.log('Autorisation obtenue, réponse : ' + reponse.getResponseCode());
+}
+
 function recupererPage_(url) {
   const propre = String(url || '').trim();
   if (!/^https?:\/\//i.test(propre)) throw new Error("Adresse invalide : elle doit commencer par https://");
