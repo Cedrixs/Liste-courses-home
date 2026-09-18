@@ -252,7 +252,11 @@ async function flushQueue() {
         (RESSOURCES_A_RECHARGER_APRES[item.action] || []).forEach(cle => aRecharger.add(cle));
       } catch (err) {
         if (estErreurReseau(err)) break; // pas de réseau : on retentera plus tard
+        // Refus du serveur (script pas à jour, article introuvable...) : on
+        // abandonne l'action pour ne pas bloquer les suivantes, mais pas en
+        // silence, sinon l'utilisateur croit que tout est enregistré.
         console.error('Action rejetée par le serveur, abandonnée :', item, err);
+        showToast(`Le serveur a refusé une action (${item.action}) : ${String(err.message || err)}`, null, 'error');
       }
       const actuelle = loadQueue();
       actuelle.shift();
