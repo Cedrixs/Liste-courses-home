@@ -54,7 +54,7 @@
       <input id="input-quantite" type="text" placeholder="Quantité (optionnel) : 500g, x6, 1L…">
       <button type="button" id="btn-fermer-quantite" class="quantite-row-close" aria-label="Retirer la quantité"><span class="ms">close</span></button>
     </div>
-    <div id="suggestions" class="suggestions" hidden></div>
+    <div id="suggestions" class="suggestions" role="listbox" aria-label="Suggestions" hidden></div>
   </header>
 
   <div class="view-scroll">
@@ -320,6 +320,29 @@
   </footer>
 </div>
 
+<div id="modal-article" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <div class="modal-handle"></div>
+    <div class="modal-entete">
+      <h3>Modifier l'article</h3>
+      <button type="button" class="modal-close" aria-label="Fermer"><span class="ms">close</span></button>
+    </div>
+    <form id="form-modal-article" class="modal-formulaire" autocomplete="off">
+      <label class="config-label" for="modal-article-nom">Nom</label>
+      <input id="modal-article-nom" type="text" class="champ-texte" required>
+      <label class="config-label" for="modal-article-categorie">Rayon</label>
+      <select id="modal-article-categorie" class="champ-texte"></select>
+      <label class="config-label" for="modal-article-quantite">Quantité</label>
+      <input id="modal-article-quantite" type="text" class="champ-texte" placeholder="500 g, x6, 1 L… (facultatif)">
+      <p class="modal-aide">Une quantité chiffrée avec son unité (500 g, 25 cl, 2 gousses) reste cumulable avec les recettes.</p>
+      <div class="modal-reference-actions">
+        <button type="button" id="modal-article-annuler" class="btn-pill btn-pill-outline">Annuler</button>
+        <button type="submit" class="btn-pill"><span class="ms">check</span>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="modal-fiche-modele" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
@@ -364,9 +387,14 @@
   </div>
 </div>
 
+<!-- Scripts classiques partageant le même espace global : app.js, chargé en
+     dernier, démarre l'appli (voir l'en-tête de app-base.js). -->
 <script src="config.js"></script>
 <script src="recettes.js"></script>
 <script src="recettes-catalogue.js"></script>
+<script src="app-base.js"></script>
+<script src="app-sync.js"></script>
+<script src="app-recettes.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

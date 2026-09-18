@@ -19,6 +19,9 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const BACKEND = 'https://script.example/macros/s/abc/exec';
 
 // ---- Backend simulé (miroir simplifié de Code.gs) ----
+// BACKEND_ANCIEN=1 simule un script pas encore mis à jour (sans getTout ni
+// actions groupées) pour vérifier que l'appli retombe sur les actions unitaires.
+const BACKEND_ANCIEN = process.env.BACKEND_ANCIEN === '1';
 function creerBackend() {
   const db = {
     liste: [], archives: [], recurrents: [], reference: [
@@ -33,7 +36,9 @@ function creerBackend() {
   const newId = () => 'srv-' + (++seq);
   const now = () => new Date().toISOString();
   const get = (action, params) => {
+    if (BACKEND_ANCIEN && action === 'getTout') throw new Error('Action GET inconnue: getTout');
     switch (action) {
+      case 'getTout': return { version: 2, liste: db.liste, archives: db.archives, modeles: get('getModeles'), modelesMeta: db.modeles, reference: db.reference, listes: db.listes, recettes: db.recettes, rechercheInternet: get('etatRechercheInternet') };
       case 'getListe': return db.liste;
       case 'getArchives': return db.archives;
       case 'getModeles': { const m = {}; db.recurrents.forEach(it => { (m[it.modele] = m[it.modele] || []).push(it); }); return m; }
@@ -48,20 +53,24 @@ function creerBackend() {
   };
   const post = (p) => {
     db.journal.push(p.action);
+    if (BACKEND_ANCIEN && ['archiverLot', 'restaurerLot', 'modifierArticle'].includes(p.action)) throw new Error('Action POST inconnue: ' + p.action);
     switch (p.action) {
+      case 'archiverLot': { let n = 0; p.ids.forEach(id => { const i = db.liste.findIndex(it => it.id === id); if (i !== -1) { const [it] = db.liste.splice(i, 1); db.archives.push({ ...it, dateArchive: now() }); n++; } }); return { archives: n }; }
+      case 'restaurerLot': { let n = 0; p.ids.forEach(id => { const i = db.archives.findIndex(it => it.id === id); if (i !== -1) { const [it] = db.archives.splice(i, 1); db.liste.push({ ...it, statut: 'actif' }); n++; } }); return { restaures: n }; }
+      case 'modifierArticle': { const it = db.liste.find(i => i.id === p.id); if (!it) throw new Error('Article introuvable'); ['nom', 'categorie', 'quantite', 'qte', 'unite'].forEach(c => { if (p[c] !== undefined) it[c] = p[c]; }); return it; }
       case 'ajouterArticle': if (!db.liste.some(it => it.id === p.id)) db.liste.push({ id: p.id, nom: p.nom, categorie: p.categorie, statut: 'actif', dateAjout: now(), dateMaj: now(), quantite: p.quantite || '', listeId: p.listeId, qte: p.qte ?? '', unite: p.unite || '', provenance: p.provenance || '' }); return { id: p.id };
       case 'toggleAchete': { const it = db.liste.find(i => i.id === p.id); if (!it) throw new Error('Article introuvable'); it.statut = p.statut; return { id: p.id }; }
       case 'archiver': { const i = db.liste.findIndex(it => it.id === p.id); if (i === -1) throw new Error('Article introuvable'); const [it] = db.liste.splice(i, 1); db.archives.push({ ...it, dateArchive: now() }); return { id: p.id }; }
       case 'restaurerDepuisArchive': { const i = db.archives.findIndex(it => it.id === p.id); if (i === -1) throw new Error('introuvable'); const [it] = db.archives.splice(i, 1); db.liste.push({ ...it, statut: 'actif' }); return { id: p.id }; }
       case 'supprimer': { const src = p.source === 'archives' ? db.archives : db.liste; const i = src.findIndex(it => it.id === p.id); if (i !== -1) src.splice(i, 1); return { id: p.id }; }
-      case 'ajouterAuModele': { if (db.recurrents.some(it => it.modele === p.modele && it.nom.toLowerCase() === p.nom.toLowerCase())) return {}; const id = newId(); db.recurrents.push({ id, modele: p.modele, nom: p.nom, categorie: p.categorie, quantite: p.quantite || '', qte: p.qte ?? '', unite: p.unite || '' }); return { id }; }
+      case 'ajouterAuModele': { if (db.recurrents.some(it => it.modele === p.modele && it.nom.toLowerCase() === p.nom.toLowerCase())) return {}; const id = (!BACKEND_ANCIEN && p.id) || newId(); db.recurrents.push({ id, modele: p.modele, nom: p.nom, categorie: p.categorie, quantite: p.quantite || '', qte: p.qte ?? '', unite: p.unite || '' }); return { id }; }
       case 'creerListe': if (!db.listes.some(l => l.id === p.id)) db.listes.push({ id: p.id, nom: p.nom, categories: p.categories }); return { id: p.id };
       case 'ajouterReference': db.reference.push({ id: p.id, nom: p.nom, categorie: p.categorie }); return { id: p.id };
       case 'supprimerDuModele': db.recurrents = db.recurrents.filter(it => it.id !== p.id); return {};
       case 'enregistrerModeleMeta': db.modeles[p.nom] = { nom: p.nom, description: p.description || '', url: p.url || '', portions: p.portions || null }; return {};
       case 'supprimerModele': db.recurrents = db.recurrents.filter(it => it.modele !== p.modele); delete db.modeles[p.modele]; return {};
-      case 'creerModeleDepuisRecette': db.modeles[p.modele] = { nom: p.modele, description: p.description || '', url: p.url || '', portions: p.portions || null }; (p.items || []).forEach(it => db.recurrents.push({ id: newId(), modele: p.modele, nom: it.nom, categorie: it.categorie, quantite: it.quantite || '', qte: it.qte ?? '', unite: it.unite || '' })); return {};
-      case 'ajouterLot': (p.items || []).forEach(it => db.liste.push({ id: newId(), nom: it.nom, categorie: it.categorie, statut: 'actif', dateAjout: now(), dateMaj: now(), quantite: it.quantite || '', listeId: p.listeId, qte: it.qte ?? '', unite: it.unite || '', provenance: it.provenance || '' })); return { ajoutes: (p.items || []).length, cumules: 0 };
+      case 'creerModeleDepuisRecette': db.modeles[p.modele] = { nom: p.modele, description: p.description || '', url: p.url || '', portions: p.portions || null }; (p.items || []).forEach(it => db.recurrents.push({ id: (!BACKEND_ANCIEN && it.id) || newId(), modele: p.modele, nom: it.nom, categorie: it.categorie, quantite: it.quantite || '', qte: it.qte ?? '', unite: it.unite || '' })); return {};
+      case 'ajouterLot': (p.items || []).forEach(it => db.liste.push({ id: it.id || newId(), nom: it.nom, categorie: it.categorie, statut: 'actif', dateAjout: now(), dateMaj: now(), quantite: it.quantite || '', listeId: p.listeId, qte: it.qte ?? '', unite: it.unite || '', provenance: it.provenance || '' })); return { ajoutes: (p.items || []).length, cumules: 0 };
       case 'enregistrerRecette': { const i = db.recettes.findIndex(r => r.nom === p.nom); const r = { id: newId(), nom: p.nom, source: p.source, url: p.url, portions: p.portions, ingredients: p.ingredients }; if (i === -1) db.recettes.push(r); else db.recettes[i] = r; return {}; }
       default: throw new Error('Action POST inconnue: ' + p.action);
     }
@@ -174,7 +183,10 @@ async function main() {
   await attendreSync();
   verif('serveur : 3 articles après annulation', backend.db.liste.length === 3 && backend.db.archives.length === 0);
 
-  // Archiver tout
+  // Archiver tout. Avec le backend ancien, on force l'appli à croire le
+  // script récent pour vérifier qu'une action groupée refusée est bien
+  // décomposée en actions unitaires (et rien de perdu).
+  if (BACKEND_ANCIEN) await page.evaluate(() => definirVersionBackend(2));
   await page.click('#btn-archiver-tout');
   await page.waitForTimeout(100);
   await shot('06-modal-archiver-tout');
@@ -182,6 +194,9 @@ async function main() {
   await attendreSync();
   verif('liste vide après archivage', await page.isVisible('#liste-vide'));
   verif('serveur : 3 archivés', backend.db.archives.length === 3);
+  const nbArchiverLot = backend.db.journal.filter(a => a === 'archiverLot').length;
+  verif(BACKEND_ANCIEN ? 'archivage groupé retombé sur 3 actions unitaires' : 'archivage groupé en une requête',
+    BACKEND_ANCIEN ? nbArchiverLot === 1 && backend.db.journal.filter(a => a === 'archiver').length >= 4 : nbArchiverLot === 1 && !backend.db.journal.slice(-1).includes('archiver'));
 
   // Archives et restauration
   await page.click('.tab-btn[data-tab="archives"]');
@@ -216,6 +231,19 @@ async function main() {
   await page.click('.tab-btn[data-tab="modeles"]');
   await page.waitForTimeout(100);
   await shot('10-modeles');
+  await page.click('.tab-btn[data-tab="liste"]');
+  await page.fill('#input-nom', 'Café');
+  await page.press('#input-nom', 'Enter');
+  await page.waitForTimeout(100);
+  if (await page.isVisible('#modal-reference')) await page.click('#modal-reference-non');
+  await page.click('.item-row:has-text("Café") [data-action="modele"]');
+  await page.click('#modal-modele-liste .modele-choix-btn:has-text("Petit déj")');
+  await attendreSync();
+  await page.waitForTimeout(300);
+  await page.click('.tab-btn[data-tab="modeles"]');
+  await page.click('.modele-carte:has-text("Petit déj") .modele-item:has-text("Café") [data-action="supprimer-du-modele"]');
+  await attendreSync();
+  verif('article retiré du modèle juste après son ajout (serveur)', !backend.db.recurrents.some(it => it.modele === 'Petit déj' && it.nom === 'Café'));
   await page.click('.modele-carte:has-text("Petit déj") [data-action="ajouter-depuis-modele"]');
   await page.waitForTimeout(100);
   await shot('11-modal-listes-destination');
@@ -319,6 +347,49 @@ async function main() {
   await attendreSync();
   await page.waitForTimeout(600);
   verif('Pinceau synchronisé', backend.db.liste.some(it => it.nom === 'Pinceau'));
+
+  // Modification d'un article (nom, rayon, quantité)
+  await page.click('.item-row:has-text("Clous") .item-nom');
+  await page.waitForTimeout(150);
+  if (BACKEND_ANCIEN) {
+    verif('modification refusée avec un backend ancien', (await texteToast() || '').includes('script'));
+  } else {
+    verif('modale de modification ouverte', await page.isVisible('#modal-article'));
+    await shot('20-modifier-article');
+    await page.fill('#modal-article-nom', 'Clous 40 mm');
+    await page.selectOption('#modal-article-categorie', 'Entretien');
+    await page.fill('#modal-article-quantite', '2 boîtes');
+    await page.press('#modal-article-quantite', 'Enter');
+    await attendreSync();
+    const modifie = backend.db.liste.find(it => it.nom === 'Clous 40 mm');
+    verif('article modifié côté serveur (nom, rayon, quantité structurée)', !!modifie && modifie.categorie === 'Entretien' && Number(modifie.qte) === 2 && modifie.unite === 'boîte' && modifie.quantite === '');
+    verif('quantité affichée après modification', (await page.locator('.item-row:has-text("Clous 40 mm")').getAttribute('data-quantite')) === '2 boîtes');
+    await page.click('.item-row:has-text("Marteau") .item-nom');
+    await page.fill('#modal-article-quantite', 'x6');
+    await page.press('#modal-article-quantite', 'Enter');
+    await attendreSync();
+    const marteau = backend.db.liste.find(it => it.nom === 'Marteau');
+    verif('quantité en texte libre conservée telle quelle', marteau.quantite === 'x6' && marteau.qte === '');
+  }
+
+  // Navigation clavier dans les suggestions
+  await page.fill('#input-nom', 'ma');
+  await page.waitForTimeout(100);
+  verif('correspondance surlignée', (await page.locator('#suggestions mark').count()) > 0);
+  await page.press('#input-nom', 'ArrowDown');
+  verif('suggestion active au clavier', (await page.locator('.suggestion-item.active').count()) === 1);
+  const suggestionActive = await page.locator('.suggestion-item.active').getAttribute('data-nom');
+  await page.press('#input-nom', 'Enter');
+  await page.waitForTimeout(50);
+  verif('Entrée reprend la suggestion sans ajouter (' + suggestionActive + ')', (await page.inputValue('#input-nom')) === suggestionActive && !(await page.isVisible('#suggestions')));
+  await page.fill('#input-nom', '');
+
+  // Rafraîchissement périodique : un ajout fait par un autre membre apparaît
+  backend.db.liste.push({ id: 'autre-1', nom: 'Perceuse', categorie: 'Autre', statut: 'actif', dateAjout: new Date().toISOString(), dateMaj: new Date().toISOString(), quantite: '', listeId: backend.db.listes.find(l => l.nom === 'Bricolage').id, qte: '', unite: '', provenance: '' });
+  await page.evaluate(() => { dernierRafraichissement = 0; rafraichissementPeriodique(); });
+  await page.waitForTimeout(700);
+  verif('ajout d\'un autre membre visible après le rafraîchissement périodique', (await page.locator('.item-row:has-text("Perceuse")').count()) === 1);
+  verif('rafraîchissement périodique sans indicateur', !(await page.evaluate(() => document.body.classList.contains('sync-en-cours'))));
 
   // Fermeture des modales : clic sur le fond, touche Échap
   await page.click('#btn-liste-active');

@@ -12,6 +12,12 @@ const SHEET_LISTES = 'Listes';
 const SHEET_MODELES = 'Modeles';
 const SHEET_RECETTES = 'Recettes';
 
+// Version de l'API annoncée à l'appli (réponse de getTout). L'appli s'en sert
+// pour savoir si les actions groupées (archiverLot, restaurerLot,
+// modifierArticle) existent sur ce déploiement ; sinon elle retombe sur les
+// actions unitaires. À incrémenter quand une nouvelle action est ajoutée.
+const VERSION_API = 2;
+
 // `quantite` (texte libre saisi à la main) coexiste avec `qte` + `unite`
 // (quantité structurée, issue d'une recette) : la première reste la source de
 // vérité quand elle est remplie, les secondes permettent le cumul et la mise à
@@ -331,6 +337,9 @@ function doGet(e) {
   try {
     let result;
     switch (action) {
+      case 'getTout':
+        result = actionGetTout();
+        break;
       case 'getListe':
         result = actionGetListe();
         break;
@@ -397,8 +406,17 @@ function doPost(e) {
       case 'archiver':
         result = withLock_(() => actionArchiver(payload));
         break;
+      case 'archiverLot':
+        result = withLock_(() => actionArchiverLot(payload));
+        break;
       case 'restaurerDepuisArchive':
         result = withLock_(() => actionRestaurerDepuisArchive(payload));
+        break;
+      case 'restaurerLot':
+        result = withLock_(() => actionRestaurerLot(payload));
+        break;
+      case 'modifierArticle':
+        result = withLock_(() => actionModifierArticle(payload));
         break;
       case 'supprimer':
         result = withLock_(() => actionSupprimer(payload));
@@ -442,6 +460,24 @@ function doPost(e) {
   }
 }
 
+// ---- Tout en une requête ----
+
+// Chaque appel à Apps Script coûte une bonne demi-seconde de démarrage : servir
+// toutes les données d'un coup est bien plus rapide que huit requêtes séparées.
+function actionGetTout() {
+  return {
+    version: VERSION_API,
+    liste: actionGetListe(),
+    archives: actionGetArchives(),
+    modeles: actionGetModeles(),
+    modelesMeta: actionGetModelesMeta(),
+    reference: actionGetReference(),
+    listes: actionGetListes(),
+    recettes: actionGetRecettes(),
+    rechercheInternet: actionEtatRechercheInternet(),
+  };
+}
+
 // ---- Liste active ----
 
 function actionGetListe() {
@@ -479,13 +515,7 @@ function actionArchiver(payload) {
   const archives = getSheet_(SHEET_ARCHIVES);
   const row = findRowIndexById_(liste, payload.id);
   if (row === -1) throw new Error('Article introuvable');
-  const obj = objetDepuisLigne_(liste, row);
-  ajouterLigne_(archives, {
-    id: obj.id, nom: obj.nom, categorie: obj.categorie, dateAjout: obj.dateAjout,
-    dateArchive: nowIso_(), quantite: obj.quantite || '', listeId: obj.listeId || '',
-    qte: obj.qte === '' || obj.qte === undefined ? '' : obj.qte,
-    unite: obj.unite || '', provenance: obj.provenance || '',
-  });
+  ajouterLigne_(archives, ligneArchive_(objetDepuisLigne_(liste, row)));
   liste.deleteRow(row);
   return { id: payload.id };
 }
@@ -504,6 +534,75 @@ function actionRestaurerDepuisArchive(payload) {
   });
   archives.deleteRow(row);
   return { id: payload.id };
+}
+
+// Ligne de la feuille Archives correspondant à un article de la liste.
+function ligneArchive_(obj) {
+  return {
+    id: obj.id, nom: obj.nom, categorie: obj.categorie, dateAjout: obj.dateAjout,
+    dateArchive: nowIso_(), quantite: obj.quantite || '', listeId: obj.listeId || '',
+    qte: obj.qte === '' || obj.qte === undefined ? '' : obj.qte,
+    unite: obj.unite || '', provenance: obj.provenance || '',
+  };
+}
+
+// Déplace plusieurs lignes d'une feuille vers une autre en une passe : une
+// lecture, une écriture groupée, puis les suppressions de bas en haut pour que
+// les numéros de ligne restent valables.
+function deplacerLignes_(source, destination, ids, transformer) {
+  const voulus = {};
+  (ids || []).forEach(function (id) { voulus[String(id)] = true; });
+  const entetes = entetesDe_(source);
+  const values = source.getDataRange().getValues();
+  const lignesADeplacer = [];
+  for (let i = 1; i < values.length; i++) {
+    if (!voulus[String(values[i][0])]) continue;
+    const obj = {};
+    entetes.forEach(function (h, j) { obj[h] = values[i][j]; });
+    lignesADeplacer.push({ row: i + 1, obj: transformer(obj) });
+  }
+  if (lignesADeplacer.length === 0) return 0;
+  const entetesDest = entetesDe_(destination);
+  const nouvelles = lignesADeplacer.map(function (l) {
+    return entetesDest.map(function (h) { return l.obj[h] === undefined || l.obj[h] === null ? '' : l.obj[h]; });
+  });
+  destination.getRange(destination.getLastRow() + 1, 1, nouvelles.length, entetesDest.length).setValues(nouvelles);
+  lignesADeplacer.sort(function (a, b) { return b.row - a.row; })
+    .forEach(function (l) { source.deleteRow(l.row); });
+  return lignesADeplacer.length;
+}
+
+function actionArchiverLot(payload) {
+  const n = deplacerLignes_(getSheet_(SHEET_LISTE), getSheet_(SHEET_ARCHIVES), payload.ids, ligneArchive_);
+  return { archives: n };
+}
+
+function actionRestaurerLot(payload) {
+  const n = deplacerLignes_(getSheet_(SHEET_ARCHIVES), getSheet_(SHEET_LISTE), payload.ids, function (obj) {
+    return {
+      id: obj.id, nom: obj.nom, categorie: obj.categorie, statut: 'actif',
+      dateAjout: obj.dateAjout, dateMaj: nowIso_(), quantite: obj.quantite || '',
+      listeId: obj.listeId || '', qte: obj.qte === '' || obj.qte === undefined ? '' : obj.qte,
+      unite: obj.unite || '', provenance: obj.provenance || '',
+    };
+  });
+  return { restaures: n };
+}
+
+// Modifie le nom, le rayon ou la quantité d'un article de la liste. Seuls les
+// champs présents dans la requête sont touchés.
+const CHAMPS_MODIFIABLES = ['nom', 'categorie', 'quantite', 'qte', 'unite'];
+
+function actionModifierArticle(payload) {
+  const sheet = getSheet_(SHEET_LISTE);
+  const row = findRowIndexById_(sheet, payload.id);
+  if (row === -1) throw new Error('Article introuvable');
+  CHAMPS_MODIFIABLES.forEach(function (champ) {
+    if (payload[champ] === undefined) return;
+    ecrireCellule_(sheet, row, champ, payload[champ] === null ? '' : payload[champ]);
+  });
+  ecrireCellule_(sheet, row, 'dateMaj', nowIso_());
+  return objetDepuisLigne_(sheet, row);
 }
 
 function actionSupprimer(payload) {
@@ -538,7 +637,7 @@ function actionAjouterAuModele(payload) {
   const doublon = items.find(it => it.modele === payload.modele &&
     String(it.nom).toLowerCase() === String(payload.nom).toLowerCase());
   if (doublon) return { id: doublon.id };
-  const id = newId_();
+  const id = payload.id || newId_();
   ajouterLigne_(sheet, {
     id: id, modele: payload.modele, nom: payload.nom, categorie: payload.categorie || 'Autre',
     quantite: payload.quantite || '',
@@ -707,7 +806,7 @@ function actionCreerModeleDepuisRecette(payload) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   items.forEach(function (item) {
     ajouterLigne_(sheet, {
-      id: newId_(), modele: nom, nom: item.nom, categorie: item.categorie || 'Autre',
+      id: item.id || newId_(), modele: nom, nom: item.nom, categorie: item.categorie || 'Autre',
       quantite: item.quantite || '',
       qte: item.qte === undefined || item.qte === null ? '' : item.qte,
       unite: item.unite || '',

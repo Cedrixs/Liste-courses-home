@@ -1,8 +1,11 @@
-const CACHE_NAME = 'liste-courses-v10';
+const CACHE_NAME = 'liste-courses-v11';
 const SHELL_FILES = [
   './',
   './index.html',
   './style.css',
+  './app-base.js',
+  './app-sync.js',
+  './app-recettes.js',
   './app.js',
   './config.js',
   './recettes.js',

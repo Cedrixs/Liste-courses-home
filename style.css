@@ -232,8 +232,10 @@ body.sync-en-cours .sync-indicateur::before { animation-play-state: running; }
   font-size: 15.5px;
 }
 .suggestion-item:first-child { border-top: none; }
-.suggestion-item small { color: var(--text-muted); font-size: 12.5px; }
-.suggestion-item:active { background: var(--bg-app); }
+.suggestion-item small { color: var(--text-muted); font-size: 12.5px; flex: none; margin-left: 10px; }
+.suggestion-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion-item:active, .suggestion-item.active { background: var(--navy-100); }
+.suggestion-item mark { background: none; color: var(--navy-700); font-weight: 700; }
 
 /* ---- En-tête compacte (Modèles / Archives) ---- */
 
@@ -340,7 +342,11 @@ body.sync-en-cours .sync-indicateur::before { animation-play-state: running; }
 }
 .item-checkbox .ms { font-size: 19px; color: #fff; }
 .item-checkbox.checked { background: var(--navy-700); border-color: var(--navy-700); }
-.item-nom { flex: 1; min-width: 0; font-size: 16px; word-break: break-word; }
+/* Le nom est un bouton : un appui ouvre la modification de l'article. */
+.item-nom {
+  flex: 1; min-width: 0; font-size: 16px; word-break: break-word; text-align: left;
+  border: none; background: none; padding: 6px 0; margin: 0; font-family: inherit; color: inherit; cursor: pointer;
+}
 .item-row.achete {
   background: #EFEDE8; border-color: #E5E0D7; box-shadow: none;
 }
@@ -582,6 +588,18 @@ body.sync-en-cours .sync-indicateur::before { animation-play-state: running; }
 }
 .modal-reference-actions { display: flex; gap: 10px; padding: 4px 16px 0; }
 .modal-reference-actions .btn-pill { flex: 1; justify-content: center; }
+
+/* ---- Modale « modifier l'article » ---- */
+
+.modal-formulaire { padding: 0 16px; }
+.modal-formulaire .config-label { margin: 8px 0 6px; }
+.champ-texte {
+  width: 100%; height: 46px; border: 1.5px solid var(--navy-200); border-radius: 12px;
+  padding: 0 14px; font-family: inherit; font-size: 15.5px; color: var(--text); background: #fff; outline: none;
+}
+.champ-texte:focus { border-color: var(--navy-500); }
+.modal-aide { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+.modal-formulaire .modal-reference-actions { padding: 16px 0 0; }
 
 /* ---- Écran de connexion ---- */
 

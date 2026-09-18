@@ -75,7 +75,7 @@ En dernier recours (si ça ne suffit toujours pas) : réglages du navigateur > e
 
 ## Limites et points d'attention
 
-- **Pas de synchronisation instantanée** : chaque personne doit rouvrir/rafraîchir l'appli pour voir les ajouts des autres (l'appli se resynchronise automatiquement à chaque ouverture et quand elle repasse au premier plan).
+- **Pas de synchronisation instantanée** : les ajouts des autres membres apparaissent à l'ouverture de l'appli, à chaque retour au premier plan, et au plus tard 30 secondes après quand l'appli reste ouverte (rafraîchissement périodique discret, sans indicateur à l'écran).
 - **Mode hors ligne** : si le téléphone n'a pas de réseau (au fond d'un magasin par exemple), les actions (ajouter, cocher, archiver) restent visibles localement et sont envoyées automatiquement au Google Sheet dès que le réseau revient. Un bandeau en bas de l'écran signale le mode hors ligne (et, en ligne, une synchronisation qui traîne) ; une fine barre animée en haut de l'écran indique qu'un échange avec le Google Sheet est en cours.
 - **Quotas Google Apps Script** : très largement suffisants pour un usage à 2-4 personnes (largement plus de 20 000 requêtes/jour sur un compte Google gratuit).
 - Le Raspberry Pi n'est pas utilisé par cette version. Il pourra servir plus tard, par exemple pour une sauvegarde automatique périodique du Google Sheet.
@@ -85,7 +85,10 @@ En dernier recours (si ça ne suffit toujours pas) : réglages du navigateur > e
 ```
 index.html                    Page principale de l'appli
 style.css                     Mise en forme
-app.js                        Logique (affichage, actions, file d'attente hors-ligne)
+app-base.js                   État partagé, utilitaires, stockage local
+app-sync.js                   Réseau : file d'attente hors ligne, rafraîchissement, détection de la version du script
+app-recettes.js               Onglet Recettes et écran d'import d'une recette
+app.js                        Actions (liste, modèles, archives), rendu des écrans, modales, démarrage
 recettes.js                   Moteur de recettes : analyse des ingrédients, mise à l'échelle, cumul
 recettes-catalogue.js         Catalogue de ~195 recettes embarquées (entrées et plats)
 config.js                     Liste des catégories (aucune donnée sensible)
@@ -102,10 +105,15 @@ Le fichier [`tests/harness.js`](tests/harness.js) sert le site en local, remplac
 
 ```
 npm install playwright && npx playwright install chromium   # une seule fois
-node tests/harness.js
+node tests/harness.js                    # script Apps Script à jour (actions groupées)
+BACKEND_ANCIEN=1 node tests/harness.js   # script pas encore mis à jour : vérifie le repli
 ```
 
 Aucune donnée réelle n'est touchée : rien n'est envoyé à votre Google Sheet.
+
+## Modifier un article
+
+Un appui sur le **nom** d'un article de la liste ouvre sa fiche : nom, rayon et quantité sont modifiables. Une quantité chiffrée avec son unité (« 500 g », « 25 cl », « 2 gousses ») est enregistrée sous forme structurée et reste cumulable avec les ingrédients d'une recette ; tout autre texte (« x6 », « une bonne poignée ») est gardé tel quel. Cette fonction a besoin de la version récente du script Apps Script (voir ci-dessous) : avec un script plus ancien, l'appli le signale au lieu de modifier l'article.
 
 ## Partir d'une recette
 
@@ -157,6 +165,13 @@ La clé est stockée **uniquement dans votre Apps Script**, jamais dans ce dép�
 
 ## Journal des évolutions récentes
 
+- **Actions groupées, modification d'un article, rafraîchissement périodique** :
+  - *Moins de requêtes* : l'appli récupère toutes ses données en une seule requête (`getTout`) au lieu de huit, et archive ou restaure toute une liste en une requête (`archiverLot`, `restaurerLot`) au lieu d'une par article. Ouverture et archivage groupé sont nettement plus rapides.
+  - *Modifier un article* depuis la liste (nom, rayon, quantité), voir « Modifier un article » ci-dessus.
+  - *Rafraîchissement périodique* toutes les 30 secondes quand l'appli est au premier plan, sans indicateur ni redessin si rien n'a changé.
+  - *Suggestions au clavier* : flèches haut/bas pour parcourir, Entrée pour reprendre la suggestion, la partie tapée est surlignée.
+  - *Code découpé* en quatre fichiers (`app-base.js`, `app-sync.js`, `app-recettes.js`, `app.js`), voir « Structure du projet ».
+  > **Script Apps Script à mettre à jour** : recollez le nouveau [`apps-script/Code.gs`](apps-script/Code.gs) et redéployez une nouvelle version (voir « Étape 1 »). Rien à faire sur la feuille elle-même, aucune colonne ni aucun onglet n'est ajouté. **L'appli fonctionne quand même avec l'ancien script** : elle détecte à l'ouverture que les actions groupées n'existent pas et retombe sur les actions unitaires (une action groupée déjà en attente est décomposée sur place, rien n'est perdu). Seule la modification d'un article reste indisponible tant que le script n'est pas à jour, et l'appli le dit.
 - **Refactorisation du code et fiabilisation de la synchronisation** : `app.js` est réorganisé en sections (état, stockage, réseau, actions, rendu, modales, recettes, câblage) avec des fonctions partagées pour ce qui était copié-collé (pluriels, quantités, boutons, modales de choix, clics délégués). Au passage, plusieurs bugs corrigés et quelques améliorations d'usage :
   - *Actions perdues* : quand plusieurs actions étaient déclenchées pendant qu'un envoi était en cours (archiver toute la liste, ajouter plusieurs articles à la suite, créer un modèle depuis une recette), seule la première arrivait au Google Sheet. La file d'attente est maintenant relue à chaque envoi.
   - *Modèle vide qui disparaissait* : un modèle créé sans article s'effaçait au rafraîchissement suivant. Sa fiche est désormais enregistrée tout de suite.
