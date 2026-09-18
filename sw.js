@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liste-courses-v9';
+const CACHE_NAME = 'liste-courses-v10';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -35,18 +35,32 @@ self.addEventListener('activate', (event) => {
 const ORIGINES_MISES_EN_CACHE = [self.location.origin, 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
   if (!ORIGINES_MISES_EN_CACHE.includes(url.origin)) return; // ne pas intercepter les appels vers Apps Script
 
   // Réseau d'abord (pour toujours servir la dernière version quand la connexion est bonne),
-  // avec repli sur le cache local si hors ligne.
+  // avec repli sur le cache local si hors ligne. Seules les réponses valables
+  // sont mises en cache (une page d'erreur ne doit pas remplacer un fichier sain) ;
+  // les réponses « opaques » (feuille de style Google Fonts) le sont aussi, sinon
+  // les polices manqueraient hors ligne.
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then(res => {
-        const copie = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copie));
+        if (res.ok || res.type === 'opaque') {
+          const copie = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, copie));
+        }
         return res;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => {
+        const enCache = await caches.match(request, { ignoreSearch: true });
+        if (enCache) return enCache;
+        // Ouverture de l'appli hors ligne via une adresse non mise en cache
+        // (paramètres dans l'URL, par exemple) : on sert la page principale.
+        if (request.mode === 'navigate') return caches.match('./index.html');
+        return undefined;
+      })
   );
 });

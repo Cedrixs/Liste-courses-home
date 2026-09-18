@@ -58,6 +58,23 @@ body {
   color: var(--text);
 }
 
+/* Fine barre animée en haut de l'écran pendant un échange avec le backend.
+   Elle n'apparaît qu'après un court délai : un échange rapide ne provoque
+   aucun clignotement. */
+.sync-indicateur {
+  position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; height: 3px;
+  z-index: 60; pointer-events: none; overflow: hidden;
+  opacity: 0; transition: opacity .25s ease .4s;
+}
+.sync-indicateur::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%;
+  border-radius: 2px; background: var(--navy-300);
+  animation: sync-glisse 1.2s ease-in-out infinite; animation-play-state: paused;
+}
+body.sync-en-cours .sync-indicateur { opacity: 1; }
+body.sync-en-cours .sync-indicateur::before { animation-play-state: running; }
+@keyframes sync-glisse { to { left: 100%; } }
+
 .offline-banner {
   position: fixed;
   bottom: calc(64px + env(safe-area-inset-bottom));
@@ -163,23 +180,15 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .add-bar-chevron { font-size: 18px; color: var(--navy-700); margin-left: -6px; }
-.add-bar-submit {
+.add-bar-btn {
   width: 50px; height: 50px; flex: none;
   border: none; border-radius: 14px; background: #fff; color: var(--navy-700);
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-floating); cursor: pointer; overflow: hidden;
 }
+.add-bar-btn:active { background: var(--navy-100); }
 .add-bar-submit .ms { font-size: 26px; }
-.add-bar-submit:active { background: var(--navy-100); }
-
-.add-bar-quantite-toggle {
-  width: 50px; height: 50px; flex: none;
-  border: none; border-radius: 14px; background: #fff; color: var(--navy-700);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-floating); cursor: pointer; overflow: hidden;
-}
 .add-bar-quantite-toggle .ms { font-size: 22px; }
-.add-bar-quantite-toggle:active { background: var(--navy-100); }
 .add-bar-quantite-toggle.actif { background: var(--navy-700); color: #fff; }
 
 .quantite-row {
@@ -487,7 +496,11 @@ body {
   display: flex; align-items: center; gap: 12px;
   box-shadow: var(--shadow-toast);
   z-index: 30;
+  animation: monter-toast .22s ease-out;
 }
+@keyframes monter-toast { from { transform: translateY(10px); opacity: 0; } }
+/* Quand le bandeau hors ligne est affiché, le toast se place au-dessus de lui. */
+.offline-banner:not([hidden]) ~ .toast { bottom: calc(106px + env(safe-area-inset-bottom)); }
 .toast-icon { font-size: 21px; color: var(--navy-300); }
 .toast-text { flex: 1; font-size: 15px; color: #fff; }
 .toast-undo {
@@ -516,8 +529,12 @@ body {
   border-radius: 22px 22px 0 0;
   box-shadow: var(--shadow-modal);
   padding: 8px 0 calc(18px + env(safe-area-inset-bottom));
-  max-height: 80vh; overflow-y: auto;
+  max-height: 80vh; overflow-y: auto; overscroll-behavior: contain;
+  animation: monter .26s cubic-bezier(.2, .8, .3, 1);
 }
+.modal { animation: fondu .18s ease-out; }
+@keyframes fondu { from { opacity: 0; } }
+@keyframes monter { from { transform: translateY(28px); opacity: .5; } }
 .modal-handle { width: 44px; height: 4px; border-radius: 2px; background: #DCD6CC; margin: 4px auto 12px; }
 .modal-entete { display: flex; align-items: center; gap: 10px; padding: 0 16px 6px; }
 .modal-entete h3 { flex: 1; min-width: 0; margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.2px; }
@@ -665,12 +682,12 @@ body {
 .recette-bloc-entete { display: flex; align-items: center; gap: 10px; }
 .recette-bloc-entete .carte-label { flex: 1; margin-bottom: 9px; }
 .recette-aide { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
-.recette-bloc textarea, .recette-screen textarea {
+.recette-screen textarea, .modal-fiche-corps textarea {
   width: 100%; border: 1.5px solid var(--card-border); border-radius: 12px;
   padding: 10px 12px; font-family: inherit; font-size: 16px; color: var(--text);
   background: #fff; resize: vertical; outline: none; margin-bottom: 8px;
 }
-.recette-bloc textarea:focus { border-color: var(--navy-500); }
+.recette-screen textarea:focus, .modal-fiche-corps textarea:focus { border-color: var(--navy-500); }
 .btn-texte-ajout {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 6px;
   background: none; border: none; padding: 6px 2px; cursor: pointer;
@@ -783,11 +800,6 @@ body {
   background: var(--bg-app); border-radius: 8px; padding: 3px 7px; flex: none;
 }
 .modal-fiche-corps { padding: 0 16px 6px; }
-.modal-fiche-corps textarea {
-  width: 100%; border: 1.5px solid var(--card-border); border-radius: 12px;
-  padding: 10px 12px; font-family: inherit; font-size: 16px; color: var(--text);
-  background: #fff; resize: vertical; outline: none; margin-bottom: 8px;
-}
 
 /* Badge de provenance sur une ligne de liste */
 .item-provenance-badge {
@@ -796,3 +808,13 @@ body {
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
 }
 .item-provenance-badge .ms { font-size: 17px; }
+
+/* ---- Accessibilité et confort ---- */
+
+/* Anneau de focus visible seulement à la navigation clavier (pas au toucher). */
+button:focus-visible, a:focus-visible { outline: 2px solid var(--navy-500); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal-card, .toast, .sync-indicateur::before { animation: none; }
+  .sync-indicateur { transition: none; }
+}

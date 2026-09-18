@@ -18,6 +18,8 @@
 </head>
 <body>
 
+<div class="sync-indicateur" aria-hidden="true"></div>
+
 <div id="offline-banner" class="offline-banner" hidden>
   <span id="offline-banner-text">Hors ligne</span>
 </div>
@@ -40,12 +42,12 @@
     <form id="form-ajout" class="add-bar-row" autocomplete="off">
       <div class="add-bar">
         <span class="ms add-bar-icon">edit</span>
-        <input id="input-nom" type="text" placeholder="Ajouter un article…" required>
+        <input id="input-nom" type="text" placeholder="Ajouter un article…" aria-label="Article à ajouter" required>
         <select id="input-categorie" class="add-bar-categorie" aria-label="Catégorie"></select>
         <span class="ms add-bar-chevron">expand_more</span>
       </div>
-      <button type="button" id="btn-toggle-quantite" class="add-bar-quantite-toggle" aria-label="Ajouter une quantité" title="Ajouter une quantité"><span class="ms">scale</span></button>
-      <button type="submit" class="add-bar-submit" aria-label="Ajouter"><span class="ms">add</span></button>
+      <button type="button" id="btn-toggle-quantite" class="add-bar-btn add-bar-quantite-toggle" aria-label="Ajouter une quantité" title="Ajouter une quantité"><span class="ms">scale</span></button>
+      <button type="submit" class="add-bar-btn add-bar-submit" aria-label="Ajouter"><span class="ms">add</span></button>
     </form>
     <div id="quantite-row" class="quantite-row" hidden>
       <span class="ms quantite-row-icon">scale</span>
@@ -165,7 +167,7 @@
 </div>
 
 <div id="modal-modele" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-entete">
       <h3>Ajouter à un modèle</h3>
@@ -181,7 +183,7 @@
 </div>
 
 <div id="modal-listes" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-entete">
       <h3 id="modal-listes-titre">Changer de liste</h3>
@@ -197,7 +199,7 @@
 </div>
 
 <div id="modal-reference" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-entete">
       <h3>Nouvel article</h3>
@@ -216,7 +218,7 @@
 </div>
 
 <div id="modal-confirmer-archiver-tout" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-entete">
       <h3>Archiver toute la liste ?</h3>
@@ -319,7 +321,7 @@
 </div>
 
 <div id="modal-fiche-modele" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-entete">
       <h3>Fiche du modèle</h3>

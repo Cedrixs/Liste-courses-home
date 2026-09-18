@@ -11,7 +11,7 @@ const RECETTES = (function () {
   // ---- Normalisation ----
 
   function sansAccents(s) {
-    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
   // Forme de comparaison : minuscules, sans accents, apostrophes uniformisées,
@@ -358,7 +358,7 @@ const RECETTES = (function () {
     if (!brut) return { type: 'ignore', brut: brut, raison: 'vide' };
 
     // Puces et tirets de début de ligne.
-    let texte = brut.replace(/^[\s\-–—•·*▪●>]+/, '').trim();
+    let texte = brut.replace(/^[\s\-\u2013\u2014•·*▪●>]+/, '').trim();
     if (!texte) return { type: 'ignore', brut: brut, raison: 'vide' };
 
     // Titre de section (« Pour la pâte : », « Garniture »).
@@ -431,13 +431,11 @@ const RECETTES = (function () {
       reste = resteAvantUnite;
     }
 
-    // 5) Nettoyage du nom : préparations rejetées en note.
+    // 5) Nettoyage du nom : ce qui suit une virgule (préparation, précision)
+    //    est rejeté en note.
     const morceaux = reste.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
     let nomNorm = morceaux.length ? morceaux[0] : '';
-    for (let i = 1; i < morceaux.length; i++) {
-      if (PREPARATIONS[morceaux[i]]) notes.push(morceaux[i]);
-      else notes.push(morceaux[i]);
-    }
+    for (let i = 1; i < morceaux.length; i++) notes.push(morceaux[i]);
     nomNorm = nomNorm.replace(/[.;:!?]+$/, '').trim();
 
     if (!nomNorm) return { type: 'ignore', brut: brut, raison: 'sans nom' };

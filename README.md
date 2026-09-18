@@ -76,7 +76,7 @@ En dernier recours (si ça ne suffit toujours pas) : réglages du navigateur > e
 ## Limites et points d'attention
 
 - **Pas de synchronisation instantanée** : chaque personne doit rouvrir/rafraîchir l'appli pour voir les ajouts des autres (l'appli se resynchronise automatiquement à chaque ouverture et quand elle repasse au premier plan).
-- **Mode hors ligne** : si le téléphone n'a pas de réseau (au fond d'un magasin par exemple), les actions (ajouter, cocher, archiver) restent visibles localement et sont envoyées automatiquement au Google Sheet dès que le réseau revient. Un petit point orange en haut de l'écran indique qu'une synchronisation est en attente.
+- **Mode hors ligne** : si le téléphone n'a pas de réseau (au fond d'un magasin par exemple), les actions (ajouter, cocher, archiver) restent visibles localement et sont envoyées automatiquement au Google Sheet dès que le réseau revient. Un bandeau en bas de l'écran signale le mode hors ligne (et, en ligne, une synchronisation qui traîne) ; une fine barre animée en haut de l'écran indique qu'un échange avec le Google Sheet est en cours.
 - **Quotas Google Apps Script** : très largement suffisants pour un usage à 2-4 personnes (largement plus de 20 000 requêtes/jour sur un compte Google gratuit).
 - Le Raspberry Pi n'est pas utilisé par cette version. Il pourra servir plus tard, par exemple pour une sauvegarde automatique périodique du Google Sheet.
 
@@ -93,7 +93,19 @@ manifest.json                 Manifeste PWA (installation sur l'écran d'accueil
 sw.js                         Service worker (réseau d'abord, repli sur le cache hors-ligne)
 icons/                        Icônes de l'appli (dont les variantes "maskable" pour Android)
 apps-script/Code.gs           Code du backend Google Apps Script à coller dans votre Google Sheet
+tests/harness.js              Tests de bout en bout (Playwright + backend simulé), voir "Vérifier l'appli"
 ```
+
+## Vérifier l'appli (tests de bout en bout)
+
+Le fichier [`tests/harness.js`](tests/harness.js) sert le site en local, remplace le backend Apps Script par une simulation en mémoire (même API que `Code.gs`, sans Google) et déroule dans Chromium les parcours principaux : ajout et suggestions, cocher et archiver avec annulation, archivage groupé, modèles, import de recette et mise à l'échelle, listes multiples, hors ligne puis retour du réseau. Chaque étape est vérifiée à l'écran et côté backend simulé, et une capture d'écran est déposée dans `tests/captures/`.
+
+```
+npm install playwright && npx playwright install chromium   # une seule fois
+node tests/harness.js
+```
+
+Aucune donnée réelle n'est touchée : rien n'est envoyé à votre Google Sheet.
 
 ## Partir d'une recette
 
@@ -145,6 +157,18 @@ La clé est stockée **uniquement dans votre Apps Script**, jamais dans ce dép�
 
 ## Journal des évolutions récentes
 
+- **Refactorisation du code et fiabilisation de la synchronisation** : `app.js` est réorganisé en sections (état, stockage, réseau, actions, rendu, modales, recettes, câblage) avec des fonctions partagées pour ce qui était copié-collé (pluriels, quantités, boutons, modales de choix, clics délégués). Au passage, plusieurs bugs corrigés et quelques améliorations d'usage :
+  - *Actions perdues* : quand plusieurs actions étaient déclenchées pendant qu'un envoi était en cours (archiver toute la liste, ajouter plusieurs articles à la suite, créer un modèle depuis une recette), seule la première arrivait au Google Sheet. La file d'attente est maintenant relue à chaque envoi.
+  - *Modèle vide qui disparaissait* : un modèle créé sans article s'effaçait au rafraîchissement suivant. Sa fiche est désormais enregistrée tout de suite.
+  - *Article qui disparaissait un instant* : un article ajouté pendant un rafraîchissement en arrière-plan pouvait s'effacer de l'écran jusqu'au rafraîchissement suivant. Une réponse serveur arrivée trop tard est maintenant ignorée, et un rafraîchissement demandé pendant que des actions attendent est rejoué une fois la file vidée.
+  - *Rayon perdu* : le rayon choisi dans la barre d'ajout n'est plus réinitialisé par un rafraîchissement en arrière-plan.
+  - *Coches non synchronisées* : les articles ajoutés depuis un modèle ou une recette gardaient un identifiant différent de celui du Google Sheet jusqu'au rafraîchissement suivant, donc cocher ou archiver juste après n'était pas transmis. Les identifiants sont maintenant envoyés, et les modèles sont rechargés après un ajout.
+  - *Pas de doublon* : ressaisir un article déjà présent ne le duplique plus (message), et le ressaisir alors qu'il est coché le remet simplement dans la liste.
+  - *Modales* : fermeture par un appui sur le fond assombri ou la touche Échap, apparition animée (désactivée si le système demande moins d'animations), suggestions refermées par un appui ailleurs.
+  - *Indicateurs* : fine barre animée en haut de l'écran pendant un échange avec le Google Sheet ; le bandeau « Synchronisation… » n'apparaît plus à chaque envoi normal mais seulement si l'envoi traîne (ou hors ligne), et le toast ne le recouvre plus.
+  - *Requêtes qui ne répondent pas* : la recherche internet et l'import par lien abandonnent après 30 secondes avec un message, au lieu de rester « en cours » indéfiniment.
+  - *Divers* : liens de fiche limités à http(s), libellés accessibles sur les boutons à icône, anneau de focus visible au clavier, stockage local protégé contre un quota dépassé, service worker qui ne met plus en cache les réponses en erreur.
+  > Aucune modification côté Google Sheet ni Apps Script : rien à recoller ni à redéployer. Le fichier [`tests/harness.js`](tests/harness.js) permet de rejouer ces parcours automatiquement (voir « Vérifier l'appli »).
 - **Import de recettes** : nouvel onglet « Recettes » permettant de taper le nom d'une recette, de coller le lien d'une page ou d'y coller une liste d'ingrédients, puis de la transformer en modèle ou de l'ajouter directement à une liste, avec mise à l'échelle par nombre de personnes et cumul des quantités. Les modèles gagnent une fiche (description et lien vers la recette). Voir « Partir d'une recette » ci-dessus.
   > Cette évolution ajoute les onglets `Modeles` et `Recettes` côté Google Sheet, ainsi que les colonnes `qte`, `unite` et `provenance`. Pensez à recoller le nouveau [`apps-script/Code.gs`](apps-script/Code.gs) et à redéployer une nouvelle version. Rien à faire sur la feuille, la mise à jour se fait toute seule au premier appel, et les quantités déjà saisies en texte libre sont conservées telles quelles.
   >
