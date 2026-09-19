@@ -151,17 +151,21 @@ La réponse indique si des ingrédients ont été trouvés, par quelle méthode,
 
 ## Recherche internet (optionnelle, à configurer)
 
-La recherche par nom peut être étendue à internet, pour les recettes absentes du catalogue. Elle passe par l'API Google Custom Search, restreinte aux sites de recettes. Tant qu'elle n'est pas configurée, l'appli fonctionne normalement : seule cette extension reste inactive.
+La recherche par nom peut être étendue à internet, pour les recettes absentes du catalogue. Elle passe par l'API Google Custom Search, restreinte aux sites de recettes. Tant qu'elle n'est pas configurée, l'appli fonctionne normalement : seule cette extension reste inactive. Les deux autres façons de partir d'une recette (coller un lien ou coller les ingrédients) restent pleinement disponibles sans rien configurer ici.
+
+> **Nécessite une carte bancaire liée à un compte de facturation Google Cloud**, même pour rester entièrement dans le quota gratuit (100 recherches par jour, 0 € facturé) : c'est une exigence de Google sur cette API précise, pas de cette appli. Si vous ne voulez pas lier de carte, passez directement à « Partir d'une recette » ci-dessous, le collage de lien ou d'ingrédients suffit.
 
 Pour l'activer :
 
 1. Créez un moteur de recherche personnalisé sur [programmablesearchengine.google.com](https://programmablesearchengine.google.com), restreint à `cookomix.com`, `marmiton.org`, `750g.com` et `cuisineaz.com`. Notez son **ID de moteur de recherche**.
-2. Créez une clé API pour l'API « Custom Search » sur [console.cloud.google.com](https://console.cloud.google.com/apis/library/customsearch.googleapis.com).
+2. Créez une clé API pour l'API « Custom Search » sur [console.cloud.google.com](https://console.cloud.google.com/apis/library/customsearch.googleapis.com), sur un projet Google Cloud qui a un **compte de facturation actif** (Facturation, dans le menu de gauche de la console).
 3. Dans votre Apps Script : **Paramètres du projet > Propriétés du script > Ajouter une propriété**, deux fois :
    - `GOOGLE_CSE_KEY` = votre clé API
    - `GOOGLE_CSE_ID` = l'ID du moteur de recherche
 
 La clé est stockée **uniquement dans votre Apps Script**, jamais dans ce dépôt public, et elle survit à un recollage de `Code.gs`. Aucun redéploiement n'est nécessaire : la recherche s'active dès que les deux propriétés sont présentes. Le quota gratuit est de 100 recherches par jour, très au-delà d'un usage familial.
+
+Si l'appli affiche une erreur du type « this project does not have the access to Custom Search JSON API » alors que la clé et le moteur de recherche sont corrects, la cause la plus fréquente est justement l'absence de compte de facturation actif sur le projet qui possède la clé (message trompeur de Google, qui ne dit pas clairement qu'il s'agit de facturation). Pour revenir en arrière et faire taire ce message, supprimez les deux propriétés `GOOGLE_CSE_KEY` et `GOOGLE_CSE_ID` dans **Paramètres du projet > Propriétés du script** : aucun redéploiement n'est nécessaire, l'appli redétecte l'absence de configuration à l'ouverture suivante.
 
 ## Journal des évolutions récentes
 
